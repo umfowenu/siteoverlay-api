@@ -2,7 +2,15 @@ require('dotenv').config();
 const express = require('express');
 const app = express();
 
-app.use(express.json());
+// Stripe webhooks need raw, others can use json
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/stripe/webhook') {
+    next(); // Let the route handle body parsing
+  } else {
+    express.json()(req, res, next);
+  }
+});
+
 
 // Import routes
 const routes = require('./routes');
