@@ -886,4 +886,33 @@ router.get('/update-schema', async (req, res) => {
   }
 });
 
+// Debug endpoint to test license validation
+router.post('/test-validate', async (req, res) => {
+  try {
+    console.log('Test validate received:', req.body);
+    
+    res.json({
+      success: true,
+      message: 'Test validation endpoint working',
+      received_data: req.body,
+      data: {
+        license_type: 'test',
+        status: 'active',
+        customer_name: 'Test User',
+        licensed_to: 'Test User',
+        expires: 'Never',
+        company: 'eBiz360'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Test validate error:', error);
+    res.json({
+      success: false,
+      message: 'Test validation failed',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
