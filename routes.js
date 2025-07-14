@@ -735,5 +735,88 @@ router.get('/fix-db', async (req, res) => {
   }
 });
 
+// Trial debug endpoint
+router.get('/debug-trial', async (req, res) => {
+  const adminSecret = req.query.secret || req.headers['x-admin-secret'];
+  if (adminSecret !== process.env.ADMIN_SECRET && adminSecret !== 'siteoverlay-setup-2025') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const siteUrl = 'https://ebiz360.ca';
+    const debug = {};
+
+    // Test 1: Check the problematic JOIN query with specific column references
+    try {
+      const existingTrial = await db.query(
+        'SELECT pi.id FROM plugin_installations pi JOIN licenses l ON pi.license_key = l.license_key WHERE pi.site_url = $1 AND l.status = $2',
+        [siteUrl, 'trial']
+      );
+      debug.join_query_fixed = {
+        success: true,
+        rows_found: existingTrial.rows.length
+      };
+    } catch (err) {
+      debug.join_query_fixed = {
+        success: false,
+        error: err.message
+      };
+    }
+
+    // Test 2: Try creating a test trial license
+    try {
+      const testKey = 'TRIAL-TEST-' + Math.random().toString(36).substr(2, 9);
+      
+      // Insert license
+      const licenseResult = await db.query(`
+        INSERT INTO licenses (license_key, license_type, status, customer_name, purchase_source)
+        VALUES ($1, $2, $3, $4, $5) RETURNING id
+      `, [testKey, 'trial', 'trial', 'Test User', 'trial_signup']);
+      
+      debug.license_insert = {
+        success: true,
+        license_id: licenseResult.rows[0].id,
+        license_key: testKey
+      };
+
+      // Test trackInstallation function
+      try {
+        await db.query(`
+          INSERT INTO plugin_installations (
+            license_key, site_url, site_title, wp_version, plugin_version, last_seen
+          ) VALUES ($1, $2, $3, $4, $5, NOW())
+          ON CONFLICT (license_key, site_url) 
+          DO UPDATE SET 
+            last_seen = NOW(),
+            activation_count = plugin_installations.activation_count + 1,
+            is_active = true
+        `, [testKey, siteUrl, 'Test Site', '6.8.1', '2.0.0']);
+        
+        debug.installation_insert = { success: true };
+      } catch (err) {
+        debug.installation_insert = { success: false, error: err.message };
+      }
+
+      // Clean up test records
+      await db.query('DELETE FROM plugin_installations WHERE license_key = $1', [testKey]);
+      await db.query('DELETE FROM licenses WHERE license_key = $1', [testKey]);
+      
+    } catch (err) {
+      debug.license_insert = { success: false, error: err.message };
+    }
+
+    res.json({
+      success: true,
+      debug: debug,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;
