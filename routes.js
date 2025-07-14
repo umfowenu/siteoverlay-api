@@ -277,7 +277,7 @@ async function trackInstallation(licenseKey, siteUrl, data) {
   }
 }
 
-// Start trial endpoint
+/// Start trial endpoint
 router.post('/start-trial', async (req, res) => {
   try {
     const { siteUrl, pluginVersion, productCode } = req.body;
@@ -289,9 +289,9 @@ router.post('/start-trial', async (req, res) => {
       });
     }
 
-    // Check if site already has a trial
+    // Check if site already has a trial - FIXED QUERY
     const existingTrial = await db.query(
-      'SELECT id FROM plugin_installations pi JOIN licenses l ON pi.license_key = l.license_key WHERE pi.site_url = $1 AND l.status = $2',
+      'SELECT pi.id FROM plugin_installations pi JOIN licenses l ON pi.license_key = l.license_key WHERE pi.site_url = $1 AND l.status = $2',
       [siteUrl, 'trial']
     );
 
