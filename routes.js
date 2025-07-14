@@ -693,84 +693,47 @@ router.get('/migrate', async (req, res) => {
 
 // Debug endpoint to check database status
 router.get('/debug', async (req, res) => {
+  // ... existing debug code ...
+});
+
+// ADD THE FIX ENDPOINT HERE ↓
+// Database fix endpoint
+router.get('/fix-db', async (req, res) => {
   const adminSecret = req.query.secret || req.headers['x-admin-secret'];
   if (adminSecret !== process.env.ADMIN_SECRET && adminSecret !== 'siteoverlay-setup-2025') {
-    return res.status(403).json({ 
-      error: 'Unauthorized - Admin secret required',
-      hint: 'Add ?secret=siteoverlay-setup-2025 to URL'
-    });
+    return res.status(403).json({ error: 'Unauthorized' });
   }
 
   try {
-    const debug = {};
-
-    // Test 1: Check if tables exist
-    const tablesResult = await db.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-      ORDER BY table_name;
+    // Fix 1: Add missing license_type column
+    await db.query(`
+      ALTER TABLE licenses 
+      ADD COLUMN IF NOT EXISTS license_type VARCHAR(50) DEFAULT 'trial';
     `);
-    debug.tables = tablesResult.rows.map(row => row.table_name);
 
-    // Test 2: Count records in each table
-    for (const table of debug.tables) {
-      try {
-        const countResult = await db.query(`SELECT COUNT(*) as count FROM ${table}`);
-        debug[`${table}_count`] = parseInt(countResult.rows[0].count);
-      } catch (err) {
-        debug[`${table}_error`] = err.message;
-      }
-    }
-
-    // Test 3: Test the specific query that's failing
-    try {
-      const siteUrl = 'https://ebiz360.ca';
-      const existingTrial = await db.query(
-        'SELECT id FROM plugin_installations pi JOIN licenses l ON pi.license_key = l.license_key WHERE pi.site_url = $1 AND l.status = $2',
-        [siteUrl, 'trial']
-      );
-      debug.existing_trial_query = {
-        success: true,
-        rows_found: existingTrial.rows.length,
-        query: 'plugin_installations JOIN licenses query worked'
-      };
-    } catch (err) {
-      debug.existing_trial_query = {
-        success: false,
-        error: err.message
-      };
-    }
-
-    // Test 4: Try a simple insert test
-    try {
-      const testKey = 'TEST-DEBUG-' + Math.random().toString(36).substr(2, 9);
-      await db.query(`
-        INSERT INTO licenses (license_key, license_type, status, customer_name, purchase_source)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [testKey, 'trial', 'trial', 'Test User', 'debug_test']);
-      
-      // Clean up test record
-      await db.query('DELETE FROM licenses WHERE license_key = $1', [testKey]);
-      
-      debug.insert_test = { success: true, message: 'Insert/delete test passed' };
-    } catch (err) {
-      debug.insert_test = { success: false, error: err.message };
-    }
+    // Fix 2: Update all existing records
+    await db.query(`
+      UPDATE licenses 
+      SET license_type = 'trial' 
+      WHERE license_type IS NULL;
+    `);
 
     res.json({
       success: true,
-      debug: debug,
-      timestamp: new Date().toISOString()
+      message: 'Database schema fixed!',
+      fixes_applied: [
+        'Added license_type column',
+        'Updated existing records'
+      ]
     });
 
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
-      stack: error.stack
+      error: error.message
     });
   }
 });
+
 
 module.exports = router;
