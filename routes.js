@@ -469,8 +469,8 @@ router.post('/request-trial', async (req, res) => {
         
         return res.json({
           success: false,
-          message: `A trial license was already sent to this email address on ${createdDate}. Please check your email (including spam folder) for: ${existingLicense.license_key}`,
-          existing_license: existingLicense.license_key
+          message: `A trial license was already sent to this email address on ${createdDate}. Please check your email (including spam folder) for your license key.`,
+          // Remove: existing_license: existingLicense.license_key
         });
       }
     } catch (dbError) {
