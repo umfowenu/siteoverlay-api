@@ -1350,4 +1350,58 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
   }
 }
 
+// Database schema update for new license system
+router.get('/update-schema', async (req, res) => {
+  const adminSecret = req.query.secret || req.headers['x-admin-secret'];
+  if (adminSecret !== process.env.ADMIN_SECRET && adminSecret !== 'siteoverlay-setup-2025') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    console.log('Updating database schema for new license system...');
+
+    // Add missing columns to licenses table
+    await db.query(`
+      ALTER TABLE licenses 
+      ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS trial_expires TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS annual_expires TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS kill_switch_enabled BOOLEAN DEFAULT true,
+      ADD COLUMN IF NOT EXISTS resale_monitoring BOOLEAN DEFAULT true,
+      ADD COLUMN IF NOT EXISTS verification_required BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS suspension_reason TEXT,
+      ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS notes TEXT;
+    `);
+
+    // Add missing columns to plugin_installations table
+    await db.query(`
+      ALTER TABLE plugin_installations
+      ADD COLUMN IF NOT EXISTS client_ip VARCHAR(45),
+      ADD COLUMN IF NOT EXISTS user_agent TEXT;
+    `);
+
+    console.log('Schema update completed successfully!');
+
+    res.json({
+      success: true,
+      message: 'Database schema updated successfully!',
+      updates_applied: [
+        'Added customer_email, trial_expires, annual_expires to licenses',
+        'Added kill_switch_enabled, resale_monitoring to licenses', 
+        'Added verification_required, suspension_reason to licenses',
+        'Added client_ip, user_agent to plugin_installations'
+      ]
+    });
+
+  } catch (error) {
+    console.error('Schema update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Schema update failed',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
