@@ -26,6 +26,81 @@ function generateLicenseKey() {
   return result;
 }
 
+// Database setup endpoint
+router.get('/setup-database', async (req, res) => {
+  try {
+    console.log('Setting up database tables...');
+    
+    // Create licenses table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS licenses (
+        id SERIAL PRIMARY KEY,
+        license_key VARCHAR(255) UNIQUE NOT NULL,
+        license_type VARCHAR(50) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        customer_email VARCHAR(255),
+        customer_name VARCHAR(255),
+        purchase_source VARCHAR(100),
+        trial_expires TIMESTAMP,
+        kill_switch_enabled BOOLEAN DEFAULT true,
+        resale_monitoring BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
+    // Create email_collection table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS email_collection (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        license_key VARCHAR(255),
+        collection_source VARCHAR(100),
+        license_type VARCHAR(50),
+        customer_name VARCHAR(255),
+        website_url VARCHAR(500),
+        sent_to_autoresponder BOOLEAN DEFAULT false,
+        collected_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
+    // Create plugin_installations table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS plugin_installations (
+        id SERIAL PRIMARY KEY,
+        license_key VARCHAR(255) NOT NULL,
+        site_url VARCHAR(500) NOT NULL,
+        site_title VARCHAR(255),
+        wp_version VARCHAR(50),
+        php_version VARCHAR(50),
+        plugin_version VARCHAR(50),
+        theme_name VARCHAR(255),
+        site_language VARCHAR(50),
+        site_timezone VARCHAR(100),
+        last_seen TIMESTAMP DEFAULT NOW(),
+        activation_count INTEGER DEFAULT 1,
+        is_active BOOLEAN DEFAULT true,
+        UNIQUE(license_key, site_url)
+      )
+    `);
+    
+    console.log('✅ Database tables created successfully!');
+    
+    res.json({
+      success: true,
+      message: 'Database tables created successfully!',
+      tables: ['licenses', 'email_collection', 'plugin_installations']
+    });
+    
+  } catch (error) {
+    console.error('❌ Database setup error:', error);
+    res.json({
+      success: false,
+      message: 'Database setup failed: ' + error.message,
+      error: error.message
+    });
+  }
+});
+
 // Core license validation endpoint - matches WordPress plugin expectations
 router.post('/validate-license', async (req, res) => {
   try {
@@ -335,107 +410,176 @@ router.post('/start-trial', async (req, res) => {
   }
 });
 
-// Email-based trial request system (NEW - Pabbly Connect integration)
+// Enhanced email-based trial request system with detailed logging
 router.post('/request-trial', async (req, res) => {
   try {
-    const { email, siteUrl, siteTitle, wpVersion, pluginVersion } = req.body;
+    console.log('🚀 Trial request received:', req.body);
+    
+    const { 
+      full_name, email, website, siteUrl, siteTitle, 
+      wpVersion, pluginVersion, userAgent, requestSource 
+    } = req.body;
 
-    if (!email || !siteUrl) {
+    console.log('📝 Extracted data:', { full_name, email, siteUrl });
+
+    // Basic validation
+    if (!full_name || !email) {
+      console.log('❌ Validation failed: Missing full_name or email');
       return res.json({
         success: false,
-        message: 'Email and site URL are required'
+        message: 'Full name and email address are required'
       });
     }
 
-    // Validate email format
+    if (!siteUrl) {
+      console.log('❌ Validation failed: Missing siteUrl');
+      return res.json({
+        success: false,
+        message: 'Site URL is required'
+      });
+    }
+
+    // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
+      console.log('❌ Validation failed: Invalid email format');
       return res.json({
         success: false,
         message: 'Please enter a valid email address'
       });
     }
 
-    // Check if email already has active trial
-    const existingTrial = await db.query(
-      'SELECT license_key FROM licenses WHERE customer_email = $1 AND license_type = $2 AND status IN ($3, $4)',
-      [email, 'trial', 'trial', 'active']
-    );
+    console.log('✅ Basic validation passed');
 
-    if (existingTrial.rows.length > 0) {
+    // Check for existing trial
+    console.log('🔍 Checking for existing trial...');
+    try {
+      const existingTrial = await db.query(
+        'SELECT license_key, created_at FROM licenses WHERE customer_email = $1 AND license_type = $2 AND status IN ($3, $4)',
+        [email, 'trial', 'trial', 'active']
+      );
+
+      console.log('📊 Existing trial query result:', existingTrial.rows.length, 'rows');
+
+      if (existingTrial.rows.length > 0) {
+        const existingLicense = existingTrial.rows[0];
+        const createdDate = new Date(existingLicense.created_at).toLocaleDateString();
+        
+        console.log('⚠️ Existing trial found:', existingLicense.license_key);
+        
+        return res.json({
+          success: false,
+          message: `A trial license was already sent to this email address on ${createdDate}. Please check your email (including spam folder) for: ${existingLicense.license_key}`,
+          existing_license: existingLicense.license_key
+        });
+      }
+    } catch (dbError) {
+      console.error('❌ Database query error (existing trial check):', dbError);
       return res.json({
         success: false,
-        message: 'A trial license has already been issued to this email address. Please check your email for the license key.',
-        existing_license: existingTrial.rows[0].license_key
+        message: 'Database error during existing trial check: ' + dbError.message
       });
     }
 
     // Generate trial license
+    console.log('🎲 Generating trial license...');
     const trialLicenseKey = 'TRIAL-' + generateLicenseKey();
     const trialExpires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-    // Create trial license in database
-    await db.query(`
-      INSERT INTO licenses (
-        license_key, license_type, status, customer_email, customer_name, 
-        purchase_source, trial_expires, kill_switch_enabled, resale_monitoring,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-    `, [
-      trialLicenseKey, 
-      'trial', 
-      'trial', 
-      email,
-      'Trial User',
-      'trial_request',
-      trialExpires,
-      true,
-      true
-    ]);
+    console.log('🔑 Generated license:', trialLicenseKey);
 
-    // Store email collection record
-    await db.query(`
-      INSERT INTO email_collection (
-        email, license_key, collection_source, license_type, 
-        sent_to_autoresponder, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
-    `, [email, trialLicenseKey, 'trial_request', 'trial', false]);
+    // Create trial license
+    console.log('💾 Inserting trial license into database...');
+    try {
+      await db.query(`
+        INSERT INTO licenses (
+          license_key, license_type, status, customer_email, customer_name, 
+          purchase_source, trial_expires, kill_switch_enabled, resale_monitoring,
+          created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      `, [
+        trialLicenseKey, 
+        'trial', 
+        'trial', 
+        email,
+        full_name,
+        'email_trial_request',
+        trialExpires,
+        true,
+        true
+      ]);
 
-    // Send to Pabbly Connect
-    const pabblySuccess = await sendToPabbly(email, trialLicenseKey, 'trial', {
-      site_url: siteUrl,
-      site_title: siteTitle,
-      wp_version: wpVersion,
-      plugin_version: pluginVersion,
-      trial_expires: trialExpires.toISOString()
-    });
-
-    // Update autoresponder status
-    if (pabblySuccess) {
-      await db.query(
-        'UPDATE email_collection SET sent_to_autoresponder = true WHERE email = $1 AND license_key = $2',
-        [email, trialLicenseKey]
-      );
+      console.log('✅ License inserted successfully');
+    } catch (dbError) {
+      console.error('❌ Database insert error (licenses):', dbError);
+      return res.json({
+        success: false,
+        message: 'Database error during license creation: ' + dbError.message
+      });
     }
 
-    console.log('Trial license created:', trialLicenseKey, 'for email:', email);
+    // Store email collection record
+    console.log('📧 Storing email collection record...');
+    try {
+      await db.query(`
+        INSERT INTO email_collection (
+          email, license_key, collection_source, license_type, 
+          customer_name, website_url, sent_to_autoresponder, collected_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `, [
+        email, 
+        trialLicenseKey, 
+        'trial_request', 
+        'trial',
+        full_name,
+        website,
+        false
+      ]);
+
+      console.log('✅ Email collection record stored');
+    } catch (dbError) {
+      console.error('❌ Database insert error (email_collection):', dbError);
+      // Don't fail the whole request for this
+      console.log('⚠️ Continuing despite email collection error...');
+    }
+
+    // Send to Pabbly Connect
+    console.log('🔗 Attempting Pabbly webhook...');
+    let pabblySuccess = false;
+    try {
+      pabblySuccess = await sendToPabbly(email, trialLicenseKey, 'trial', {
+        customer_name: full_name,
+        website_url: website,
+        site_url: siteUrl,
+        trial_expires: trialExpires.toISOString(),
+        license_key: trialLicenseKey
+      });
+      console.log('📨 Pabbly webhook result:', pabblySuccess);
+    } catch (pabblyError) {
+      console.error('❌ Pabbly webhook error:', pabblyError);
+      // Don't fail the whole request for this
+      console.log('⚠️ Continuing despite Pabbly error...');
+    }
+
+    console.log('✅ Trial license created successfully:', trialLicenseKey, 'for:', email);
 
     res.json({
       success: true,
-      message: 'Trial license has been sent to your email address. Please check your inbox and spam folder.',
+      message: `Trial license created successfully! Your 14-day trial license has been sent to ${email}.`,
       data: {
         email: email,
+        customer_name: full_name,
         license_key: trialLicenseKey,
         expires: trialExpires.toISOString(),
-        pabbly_status: pabblySuccess ? 'sent' : 'pending'
+        pabbly_status: pabblySuccess ? 'email_sent' : 'email_pending'
       }
     });
 
   } catch (error) {
-    console.error('Trial request error:', error);
+    console.error('❌ Unexpected trial request error:', error);
     res.json({
       success: false,
-      message: 'Failed to process trial request. Please try again.'
+      message: 'Unexpected error: ' + error.message
     });
   }
 });
@@ -508,10 +652,9 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       license_type: licenseType,
       
       // Customer context
+      customer_name: metadata.customer_name || '',
+      website_url: metadata.website_url || '',
       site_url: metadata.site_url || '',
-      site_title: metadata.site_title || '',
-      wp_version: metadata.wp_version || '',
-      plugin_version: metadata.plugin_version || '',
       
       // Timing data
       signup_date: new Date().toISOString(),
@@ -558,80 +701,5 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
     return false;
   }
 }
-
-// Database setup endpoint - add this to routes.js
-router.get('/setup-database', async (req, res) => {
-  try {
-    console.log('Setting up database tables...');
-    
-    // Create licenses table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS licenses (
-        id SERIAL PRIMARY KEY,
-        license_key VARCHAR(255) UNIQUE NOT NULL,
-        license_type VARCHAR(50) NOT NULL,
-        status VARCHAR(50) NOT NULL,
-        customer_email VARCHAR(255),
-        customer_name VARCHAR(255),
-        purchase_source VARCHAR(100),
-        trial_expires TIMESTAMP,
-        kill_switch_enabled BOOLEAN DEFAULT true,
-        resale_monitoring BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    
-    // Create email_collection table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS email_collection (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) NOT NULL,
-        license_key VARCHAR(255),
-        collection_source VARCHAR(100),
-        license_type VARCHAR(50),
-        customer_name VARCHAR(255),
-        website_url VARCHAR(500),
-        sent_to_autoresponder BOOLEAN DEFAULT false,
-        collected_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    
-    // Create plugin_installations table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS plugin_installations (
-        id SERIAL PRIMARY KEY,
-        license_key VARCHAR(255) NOT NULL,
-        site_url VARCHAR(500) NOT NULL,
-        site_title VARCHAR(255),
-        wp_version VARCHAR(50),
-        php_version VARCHAR(50),
-        plugin_version VARCHAR(50),
-        theme_name VARCHAR(255),
-        site_language VARCHAR(50),
-        site_timezone VARCHAR(100),
-        last_seen TIMESTAMP DEFAULT NOW(),
-        activation_count INTEGER DEFAULT 1,
-        is_active BOOLEAN DEFAULT true,
-        UNIQUE(license_key, site_url)
-      )
-    `);
-    
-    console.log('✅ Database tables created successfully!');
-    
-    res.json({
-      success: true,
-      message: 'Database tables created successfully!',
-      tables: ['licenses', 'email_collection', 'plugin_installations']
-    });
-    
-  } catch (error) {
-    console.error('❌ Database setup error:', error);
-    res.json({
-      success: false,
-      message: 'Database setup failed: ' + error.message,
-      error: error.message
-    });
-  }
-});
 
 module.exports = router;
