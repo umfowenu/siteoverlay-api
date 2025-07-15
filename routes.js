@@ -702,4 +702,38 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
   }
 }
 
+// Fix database structure - add missing created_at column
+router.get('/fix-database', async (req, res) => {
+  try {
+    console.log('Fixing database structure...');
+    
+    // Add missing created_at column to licenses table
+    await db.query(`
+      ALTER TABLE licenses 
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
+    `);
+    
+    // Update existing records without created_at
+    await db.query(`
+      UPDATE licenses 
+      SET created_at = NOW() 
+      WHERE created_at IS NULL
+    `);
+    
+    console.log('✅ Database structure fixed!');
+    
+    res.json({
+      success: true,
+      message: 'Database structure fixed successfully!'
+    });
+    
+  } catch (error) {
+    console.error('❌ Database fix error:', error);
+    res.json({
+      success: false,
+      message: 'Database fix failed: ' + error.message
+    });
+  }
+});
+
 module.exports = router;
