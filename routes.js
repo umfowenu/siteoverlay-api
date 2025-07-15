@@ -410,9 +410,8 @@ router.post('/request-trial', async (req, res) => {
     await db.query(`
       INSERT INTO licenses (
         license_key, license_type, status, customer_email, customer_name, 
-        purchase_source, trial_expires, kill_switch_enabled, resale_monitoring,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        purchase_source, trial_expires, kill_switch_enabled, resale_monitoring
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [
       trialLicenseKey, 
       'trial', 
