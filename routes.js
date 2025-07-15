@@ -559,4 +559,79 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
   }
 }
 
+// Database setup endpoint - add this to routes.js
+router.get('/setup-database', async (req, res) => {
+  try {
+    console.log('Setting up database tables...');
+    
+    // Create licenses table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS licenses (
+        id SERIAL PRIMARY KEY,
+        license_key VARCHAR(255) UNIQUE NOT NULL,
+        license_type VARCHAR(50) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        customer_email VARCHAR(255),
+        customer_name VARCHAR(255),
+        purchase_source VARCHAR(100),
+        trial_expires TIMESTAMP,
+        kill_switch_enabled BOOLEAN DEFAULT true,
+        resale_monitoring BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
+    // Create email_collection table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS email_collection (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        license_key VARCHAR(255),
+        collection_source VARCHAR(100),
+        license_type VARCHAR(50),
+        customer_name VARCHAR(255),
+        website_url VARCHAR(500),
+        sent_to_autoresponder BOOLEAN DEFAULT false,
+        collected_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
+    // Create plugin_installations table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS plugin_installations (
+        id SERIAL PRIMARY KEY,
+        license_key VARCHAR(255) NOT NULL,
+        site_url VARCHAR(500) NOT NULL,
+        site_title VARCHAR(255),
+        wp_version VARCHAR(50),
+        php_version VARCHAR(50),
+        plugin_version VARCHAR(50),
+        theme_name VARCHAR(255),
+        site_language VARCHAR(50),
+        site_timezone VARCHAR(100),
+        last_seen TIMESTAMP DEFAULT NOW(),
+        activation_count INTEGER DEFAULT 1,
+        is_active BOOLEAN DEFAULT true,
+        UNIQUE(license_key, site_url)
+      )
+    `);
+    
+    console.log('✅ Database tables created successfully!');
+    
+    res.json({
+      success: true,
+      message: 'Database tables created successfully!',
+      tables: ['licenses', 'email_collection', 'plugin_installations']
+    });
+    
+  } catch (error) {
+    console.error('❌ Database setup error:', error);
+    res.json({
+      success: false,
+      message: 'Database setup failed: ' + error.message,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
