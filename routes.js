@@ -1404,4 +1404,45 @@ router.get('/update-schema', async (req, res) => {
   }
 });
 
+// Fix missing created_at column
+router.get('/fix-created-at', async (req, res) => {
+  const adminSecret = req.query.secret || req.headers['x-admin-secret'];
+  if (adminSecret !== process.env.ADMIN_SECRET && adminSecret !== 'siteoverlay-setup-2025') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    console.log('Adding missing created_at column...');
+
+    // Add the missing created_at column
+    await db.query(`
+      ALTER TABLE licenses 
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // Update existing records to have created_at
+    await db.query(`
+      UPDATE licenses 
+      SET created_at = CURRENT_TIMESTAMP 
+      WHERE created_at IS NULL;
+    `);
+
+    console.log('created_at column added successfully!');
+
+    res.json({
+      success: true,
+      message: 'created_at column added successfully!',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Fix created_at error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Fix failed',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
