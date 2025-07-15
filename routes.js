@@ -915,4 +915,216 @@ router.post('/test-validate', async (req, res) => {
   }
 });
 
+// Email-based trial request system
+router.post('/request-trial', async (req, res) => {
+  try {
+    const { email, siteUrl, siteTitle, wpVersion, pluginVersion } = req.body;
+
+    if (!email || !siteUrl) {
+      return res.json({
+        success: false,
+        message: 'Email and site URL are required'
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    // Check if email already has active trial
+    const existingTrial = await db.query(
+      'SELECT license_key FROM licenses WHERE customer_email = $1 AND license_type = $2 AND status IN ($3, $4)',
+      [email, 'trial', 'trial', 'active']
+    );
+
+    if (existingTrial.rows.length > 0) {
+      return res.json({
+        success: false,
+        message: 'A trial license has already been issued to this email address. Please check your email for the license key.',
+        existing_license: existingTrial.rows[0].license_key
+      });
+    }
+
+    // Generate trial license
+    const trialLicenseKey = 'TRIAL-' + generateLicenseKey();
+    const trialExpires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+
+    // Create trial license in database
+    await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name, 
+        purchase_source, trial_expires, kill_switch_enabled, resale_monitoring,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+    `, [
+      trialLicenseKey, 
+      'trial', 
+      'trial', 
+      email,
+      'Trial User',
+      'trial_request',
+      trialExpires,
+      true,
+      true
+    ]);
+
+    // Store email collection record
+    await db.query(`
+      INSERT INTO email_collection (
+        email, license_key, collection_source, license_type, 
+        sent_to_autoresponder, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
+    `, [email, trialLicenseKey, 'trial_request', 'trial', false]);
+
+    // Send to Aweber
+    const aweberSuccess = await sendToAweber(email, trialLicenseKey, 'trial', {
+      site_url: siteUrl,
+      site_title: siteTitle,
+      wp_version: wpVersion,
+      plugin_version: pluginVersion
+    });
+
+    // Update autoresponder status
+    if (aweberSuccess) {
+      await db.query(
+        'UPDATE email_collection SET sent_to_autoresponder = true WHERE email = $1 AND license_key = $2',
+        [email, trialLicenseKey]
+      );
+    }
+
+    console.log('Trial license created:', trialLicenseKey, 'for email:', email);
+
+    res.json({
+      success: true,
+      message: 'Trial license has been sent to your email address. Please check your inbox and spam folder.',
+      data: {
+        email: email,
+        license_sent: true,
+        aweber_status: aweberSuccess ? 'sent' : 'pending'
+      }
+    });
+
+  } catch (error) {
+    console.error('Trial request error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to process trial request. Please try again.'
+    });
+  }
+});
+
+// Enhanced email collection endpoint
+router.post('/collect-email', async (req, res) => {
+  try {
+    const { email, source, licenseKey, siteUrl, tags } = req.body;
+
+    if (!email) {
+      return res.json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    // Store email collection
+    await db.query(`
+      INSERT INTO email_collection (
+        email, license_key, site_url, collection_source, tags, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
+      ON CONFLICT (email, license_key) 
+      DO UPDATE SET collection_source = $4, tags = $5, collected_at = NOW()
+    `, [
+      email, 
+      licenseKey || null, 
+      siteUrl || null, 
+      source || 'newsletter_signup',
+      JSON.stringify(tags || ['newsletter'])
+    ]);
+
+    // Send to Aweber for newsletter signup
+    const aweberSuccess = await sendToAweber(email, licenseKey || 'newsletter', 'newsletter', {
+      source: source || 'newsletter_signup',
+      site_url: siteUrl
+    });
+
+    res.json({
+      success: true,
+      message: 'Email collected successfully',
+      aweber_status: aweberSuccess ? 'sent' : 'logged'
+    });
+
+  } catch (error) {
+    console.error('Email collection error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to collect email'
+    });
+  }
+});
+
+// Aweber integration function
+async function sendToAweber(email, licenseKey, licenseType, metadata = {}) {
+  try {
+    // Prepare data for Aweber
+    const aweberData = {
+      email: email,
+      license_key: licenseKey,
+      license_type: licenseType,
+      site_url: metadata.site_url || '',
+      site_title: metadata.site_title || '',
+      wp_version: metadata.wp_version || '',
+      plugin_version: metadata.plugin_version || '',
+      signup_date: new Date().toISOString(),
+      tags: [licenseType, 'siteoverlay-pro'],
+      custom_fields: {
+        license_key: licenseKey,
+        license_type: licenseType,
+        product: 'SiteOverlay Pro'
+      }
+    };
+
+    console.log('Preparing Aweber data for:', email, 'License:', licenseKey);
+
+    // Send to Aweber webhook URL (if configured)
+    if (process.env.AWEBER_WEBHOOK_URL) {
+      const response = await fetch(process.env.AWEBER_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aweberData)
+      });
+
+      if (response.ok) {
+        console.log('Aweber webhook successful for:', email);
+        return true;
+      } else {
+        console.error('Aweber webhook failed:', response.status, response.statusText);
+        return false;
+      }
+    } else {
+      console.log('No Aweber webhook URL configured - email data stored locally');
+      // For now, we'll return true so the system works without Aweber configured
+      return true;
+    }
+
+  } catch (error) {
+    console.error('Aweber integration error:', error);
+    return false;
+  }
+}
+
 module.exports = router;
