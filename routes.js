@@ -1444,4 +1444,32 @@ router.get('/fix-created-at', async (req, res) => {
   }
 });
 
+// Simple database test - no auth needed
+router.get('/test-db', async (req, res) => {
+  try {
+    // Test basic database connection
+    const result = await db.query('SELECT NOW() as current_time');
+    
+    // Test licenses table structure
+    const columns = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'licenses'
+      ORDER BY ordinal_position
+    `);
+
+    res.json({
+      success: true,
+      database_time: result.rows[0].current_time,
+      licenses_columns: columns.rows
+    });
+
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
