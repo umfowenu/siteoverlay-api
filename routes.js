@@ -251,10 +251,6 @@ function getLicenseConfig(priceId, productId) {
   } else if (productId.includes('lifetime') || productId.includes('297')) {
     return priceConfigs['price_lifetime_unlimited'];
   } else if (productId.includes('annual') || productId.includes('197'))
-You're right - I can't create downloadable hyperlinks. Let me give you the raw code to copy-paste instead, which will be much easier.
-
-🔧 Here's the Exact Code to Add to Your routes.js
-Open your railway-api/routes.js file and add this code right after line 16 (after the health check endpoint):
 
 // NEW: Stripe webhook endpoint for payment processing
 router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
