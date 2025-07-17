@@ -16,6 +16,488 @@ router.get('/health', (req, res) => {
   });
 });
 
+// NEW: Stripe webhook endpoint for payment processing
+router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    console.log('✅ Stripe webhook verified:', event.type);
+  } catch (err) {
+    console.error('❌ Stripe webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    // Handle the event
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object);
+        break;
+      case 'payment_intent.succeeded':
+        await handlePaymentSucceeded(event.data.object);
+        break;
+      case 'invoice.payment_succeeded':
+        await handleSubscriptionPayment(event.data.object);
+        break;
+      case 'customer.subscription.deleted':
+        await handleSubscriptionCancelled(event.data.object);
+        break;
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({received: true});
+  } catch (error) {
+    console.error('❌ Stripe webhook processing error:', error);
+    res.status(500).json({error: 'Webhook processing failed'});
+  }
+});
+
+// Handle successful checkout completion
+async function handleCheckoutCompleted(session) {
+  console.log('🛒 Processing checkout completion:', session.id);
+  
+  try {
+    // Get line items to determine product
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+      expand: ['data.price.product']
+    });
+    
+    if (!lineItems.data.length) {
+      console.error('❌ No line items found for session:', session.id);
+      return;
+    }
+    
+    const priceId = lineItems.data[0].price.id;
+    const productId = lineItems.data[0].price.product.id;
+    const customerEmail = session.customer_details?.email;
+    const customerName = session.customer_details?.name || 'Customer';
+    
+    console.log('📦 Product details:', { priceId, productId, customerEmail });
+    
+    // Determine license type based on price ID or product ID
+    const licenseConfig = getLicenseConfig(priceId, productId);
+    if (!licenseConfig) {
+      console.error('❌ Unknown product/price ID:', { priceId, productId });
+      return;
+    }
+    
+    // Generate license key
+    const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
+    console.log('🔑 Generated license:', licenseKey);
+    
+    // Calculate expiration date
+    let expirationDate = null;
+    if (licenseConfig.type === 'annual_unlimited') {
+      expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+    }
+    
+    // Create license in database
+    await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name,
+        purchase_source, trial_expires, site_limit, kill_switch_enabled, 
+        resale_monitoring, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+    `, [
+      licenseKey,
+      licenseConfig.type,
+      'active',
+      customerEmail,
+      customerName,
+      'stripe_checkout',
+      expirationDate,
+      licenseConfig.siteLimit,
+      true,
+      true
+    ]);
+    
+    console.log('✅ License created in database');
+    
+    // Send license email via Pabbly
+    const pabblySuccess = await sendToPabbly(customerEmail, licenseKey, licenseConfig.type, {
+      customer_name: customerName,
+      purchase_amount: session.amount_total / 100,
+      currency: session.currency,
+      stripe_session_id: session.id
+    });
+    
+    console.log('📧 License email sent via Pabbly:', pabblySuccess);
+    
+    // Store email collection record
+    await db.query(`
+      INSERT INTO email_collection (
+        email, license_key, collection_source, license_type,
+        customer_name, sent_to_autoresponder, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `, [
+      customerEmail,
+      licenseKey,
+      'stripe_purchase',
+      licenseConfig.type,
+      customerName,
+      pabblySuccess
+    ]);
+    
+    console.log('✅ Checkout processing completed for:', customerEmail);
+    
+  } catch (error) {
+    console.error('❌ Checkout processing error:', error);
+    throw error;
+  }
+}
+
+// Handle payment succeeded (for one-time payments)
+async function handlePaymentSucceeded(paymentIntent) {
+  console.log('💳 Payment succeeded:', paymentIntent.id);
+  // Additional processing if needed
+}
+
+// Handle subscription payment (for monthly subscriptions)
+async function handleSubscriptionPayment(invoice) {
+  console.log('🔄 Subscription payment:', invoice.id);
+  
+  try {
+    const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    
+    // Check if this is a renewal or new subscription
+    const existingLicense = await db.query(
+      'SELECT * FROM licenses WHERE customer_email = $1 AND license_type = $2',
+      [customer.email, 'professional']
+    );
+    
+    if (existingLicense.rows.length === 0) {
+      // New subscription - create license
+      await handleCheckoutCompleted({
+        customer_details: {
+          email: customer.email,
+          name: customer.name || 'Customer'
+        },
+        id: `sub_${subscription.id}`,
+        amount_total: invoice.amount_paid,
+        currency: invoice.currency
+      });
+    } else {
+      // Renewal - update existing license
+      await db.query(
+        'UPDATE licenses SET status = $1, trial_expires = NULL WHERE customer_email = $2 AND license_type = $3',
+        ['active', customer.email, 'professional']
+      );
+      console.log('✅ Subscription renewed for:', customer.email);
+    }
+    
+  } catch (error) {
+    console.error('❌ Subscription payment processing error:', error);
+    throw error;
+  }
+}
+
+// Handle subscription cancellation
+async function handleSubscriptionCancelled(subscription) {
+  console.log('❌ Subscription cancelled:', subscription.id);
+  
+  try {
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    
+    // Deactivate license
+    await db.query(
+      'UPDATE licenses SET status = $1 WHERE customer_email = $2 AND license_type = $3',
+      ['cancelled', customer.email, 'professional']
+    );
+    
+    console.log('✅ License deactivated for cancelled subscription:', customer.email);
+    
+  } catch (error) {
+    console.error('❌ Subscription cancellation processing error:', error);
+    throw error;
+  }
+}
+
+// Get license configuration based on Stripe price/product ID
+function getLicenseConfig(priceId, productId) {
+  // Configure your Stripe price IDs here
+  const priceConfigs = {
+    // $35/month Professional (5 sites)
+    'price_professional_monthly': {
+      type: 'professional',
+      prefix: 'PRO',
+      siteLimit: 5
+    },
+    // $297 Lifetime Unlimited
+    'price_lifetime_unlimited': {
+      type: 'lifetime_unlimited',
+      prefix: 'LIFE',
+      siteLimit: -1
+    },
+    // $197/year Annual Unlimited (NEW PRODUCT)
+    'price_annual_unlimited': {
+      type: 'annual_unlimited',
+      prefix: 'ANN',
+      siteLimit: -1
+    }
+  };
+  
+  // Try to match by price ID first, then by product ID patterns
+  if (priceConfigs[priceId]) {
+    return priceConfigs[priceId];
+  }
+  
+  // Fallback: try to determine by product ID patterns
+  if (productId.includes('professional') || productId.includes('5site')) {
+    return priceConfigs['price_professional_monthly'];
+  } else if (productId.includes('lifetime') || productId.includes('297')) {
+    return priceConfigs['price_lifetime_unlimited'];
+  } else if (productId.includes('annual') || productId.includes('197'))
+You're right - I can't create downloadable hyperlinks. Let me give you the raw code to copy-paste instead, which will be much easier.
+
+🔧 Here's the Exact Code to Add to Your routes.js
+Open your railway-api/routes.js file and add this code right after line 16 (after the health check endpoint):
+
+// NEW: Stripe webhook endpoint for payment processing
+router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    console.log('✅ Stripe webhook verified:', event.type);
+  } catch (err) {
+    console.error('❌ Stripe webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    // Handle the event
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object);
+        break;
+      case 'payment_intent.succeeded':
+        await handlePaymentSucceeded(event.data.object);
+        break;
+      case 'invoice.payment_succeeded':
+        await handleSubscriptionPayment(event.data.object);
+        break;
+      case 'customer.subscription.deleted':
+        await handleSubscriptionCancelled(event.data.object);
+        break;
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({received: true});
+  } catch (error) {
+    console.error('❌ Stripe webhook processing error:', error);
+    res.status(500).json({error: 'Webhook processing failed'});
+  }
+});
+
+// Handle successful checkout completion
+async function handleCheckoutCompleted(session) {
+  console.log('🛒 Processing checkout completion:', session.id);
+  
+  try {
+    // Get line items to determine product
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+      expand: ['data.price.product']
+    });
+    
+    if (!lineItems.data.length) {
+      console.error('❌ No line items found for session:', session.id);
+      return;
+    }
+    
+    const priceId = lineItems.data[0].price.id;
+    const productId = lineItems.data[0].price.product.id;
+    const customerEmail = session.customer_details?.email;
+    const customerName = session.customer_details?.name || 'Customer';
+    
+    console.log('📦 Product details:', { priceId, productId, customerEmail });
+    
+    // Determine license type based on price ID or product ID
+    const licenseConfig = getLicenseConfig(priceId, productId);
+    if (!licenseConfig) {
+      console.error('❌ Unknown product/price ID:', { priceId, productId });
+      return;
+    }
+    
+    // Generate license key
+    const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
+    console.log('🔑 Generated license:', licenseKey);
+    
+    // Calculate expiration date
+    let expirationDate = null;
+    if (licenseConfig.type === 'annual_unlimited') {
+      expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+    }
+    
+    // Create license in database
+    await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name,
+        purchase_source, trial_expires, site_limit, kill_switch_enabled, 
+        resale_monitoring, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+    `, [
+      licenseKey,
+      licenseConfig.type,
+      'active',
+      customerEmail,
+      customerName,
+      'stripe_checkout',
+      expirationDate,
+      licenseConfig.siteLimit,
+      true,
+      true
+    ]);
+    
+    console.log('✅ License created in database');
+    
+    // Send license email via Pabbly
+    const pabblySuccess = await sendToPabbly(customerEmail, licenseKey, licenseConfig.type, {
+      customer_name: customerName,
+      purchase_amount: session.amount_total / 100,
+      currency: session.currency,
+      stripe_session_id: session.id
+    });
+    
+    console.log('📧 License email sent via Pabbly:', pabblySuccess);
+    
+    // Store email collection record
+    await db.query(`
+      INSERT INTO email_collection (
+        email, license_key, collection_source, license_type,
+        customer_name, sent_to_autoresponder, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `, [
+      customerEmail,
+      licenseKey,
+      'stripe_purchase',
+      licenseConfig.type,
+      customerName,
+      pabblySuccess
+    ]);
+    
+    console.log('✅ Checkout processing completed for:', customerEmail);
+    
+  } catch (error) {
+    console.error('❌ Checkout processing error:', error);
+    throw error;
+  }
+}
+
+// Handle payment succeeded (for one-time payments)
+async function handlePaymentSucceeded(paymentIntent) {
+  console.log('💳 Payment succeeded:', paymentIntent.id);
+  // Additional processing if needed
+}
+
+// Handle subscription payment (for monthly subscriptions)
+async function handleSubscriptionPayment(invoice) {
+  console.log('🔄 Subscription payment:', invoice.id);
+  
+  try {
+    const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    
+    // Check if this is a renewal or new subscription
+    const existingLicense = await db.query(
+      'SELECT * FROM licenses WHERE customer_email = $1 AND license_type = $2',
+      [customer.email, 'professional']
+    );
+    
+    if (existingLicense.rows.length === 0) {
+      // New subscription - create license
+      await handleCheckoutCompleted({
+        customer_details: {
+          email: customer.email,
+          name: customer.name || 'Customer'
+        },
+        id: `sub_${subscription.id}`,
+        amount_total: invoice.amount_paid,
+        currency: invoice.currency
+      });
+    } else {
+      // Renewal - update existing license
+      await db.query(
+        'UPDATE licenses SET status = $1, trial_expires = NULL WHERE customer_email = $2 AND license_type = $3',
+        ['active', customer.email, 'professional']
+      );
+      console.log('✅ Subscription renewed for:', customer.email);
+    }
+    
+  } catch (error) {
+    console.error('❌ Subscription payment processing error:', error);
+    throw error;
+  }
+}
+
+// Handle subscription cancellation
+async function handleSubscriptionCancelled(subscription) {
+  console.log('❌ Subscription cancelled:', subscription.id);
+  
+  try {
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    
+    // Deactivate license
+    await db.query(
+      'UPDATE licenses SET status = $1 WHERE customer_email = $2 AND license_type = $3',
+      ['cancelled', customer.email, 'professional']
+    );
+    
+    console.log('✅ License deactivated for cancelled subscription:', customer.email);
+    
+  } catch (error) {
+    console.error('❌ Subscription cancellation processing error:', error);
+    throw error;
+  }
+}
+
+// Get license configuration based on Stripe price/product ID
+function getLicenseConfig(priceId, productId) {
+  // Configure your Stripe price IDs here
+  const priceConfigs = {
+    // $35/month Professional (5 sites)
+    'price_professional_monthly': {
+      type: 'professional',
+      prefix: 'PRO',
+      siteLimit: 5
+    },
+    // $297 Lifetime Unlimited
+    'price_lifetime_unlimited': {
+      type: 'lifetime_unlimited',
+      prefix: 'LIFE',
+      siteLimit: -1
+    },
+    // $197/year Annual Unlimited (NEW PRODUCT)
+    'price_annual_unlimited': {
+      type: 'annual_unlimited',
+      prefix: 'ANN',
+      siteLimit: -1
+    }
+  };
+  
+  // Try to match by price ID first, then by product ID patterns
+  if (priceConfigs[priceId]) {
+    return priceConfigs[priceId];
+  }
+  
+  // Fallback: try to determine by product ID patterns
+  if (productId.includes('professional') || productId.includes('5site')) {
+    return priceConfigs['price_professional_monthly'];
+  } else if (productId.includes('lifetime') || productId.includes('297')) {
+    return priceConfigs['price_lifetime_unlimited'];
+  } else if (productId.includes('annual') || productId.includes('197')) {
+    return priceConfigs['price_annual_unlimited'];
+  }
+  
+  console.error('❌ No license config found for:', { priceId, productId });
+  return null;
+}
+
 // Generate unique license key
 function generateLicenseKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
