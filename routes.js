@@ -250,242 +250,6 @@ function getLicenseConfig(priceId, productId) {
     return priceConfigs['price_professional_monthly'];
   } else if (productId.includes('lifetime') || productId.includes('297')) {
     return priceConfigs['price_lifetime_unlimited'];
-  } else if (productId.includes('annual') || productId.includes('197'))
-
-// NEW: Stripe webhook endpoint for payment processing
-router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    console.log('✅ Stripe webhook verified:', event.type);
-  } catch (err) {
-    console.error('❌ Stripe webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  try {
-    // Handle the event
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object);
-        break;
-      case 'payment_intent.succeeded':
-        await handlePaymentSucceeded(event.data.object);
-        break;
-      case 'invoice.payment_succeeded':
-        await handleSubscriptionPayment(event.data.object);
-        break;
-      case 'customer.subscription.deleted':
-        await handleSubscriptionCancelled(event.data.object);
-        break;
-      default:
-        console.log(`Unhandled event type ${event.type}`);
-    }
-
-    res.json({received: true});
-  } catch (error) {
-    console.error('❌ Stripe webhook processing error:', error);
-    res.status(500).json({error: 'Webhook processing failed'});
-  }
-});
-
-// Handle successful checkout completion
-async function handleCheckoutCompleted(session) {
-  console.log('🛒 Processing checkout completion:', session.id);
-  
-  try {
-    // Get line items to determine product
-    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
-      expand: ['data.price.product']
-    });
-    
-    if (!lineItems.data.length) {
-      console.error('❌ No line items found for session:', session.id);
-      return;
-    }
-    
-    const priceId = lineItems.data[0].price.id;
-    const productId = lineItems.data[0].price.product.id;
-    const customerEmail = session.customer_details?.email;
-    const customerName = session.customer_details?.name || 'Customer';
-    
-    console.log('📦 Product details:', { priceId, productId, customerEmail });
-    
-    // Determine license type based on price ID or product ID
-    const licenseConfig = getLicenseConfig(priceId, productId);
-    if (!licenseConfig) {
-      console.error('❌ Unknown product/price ID:', { priceId, productId });
-      return;
-    }
-    
-    // Generate license key
-    const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
-    console.log('🔑 Generated license:', licenseKey);
-    
-    // Calculate expiration date
-    let expirationDate = null;
-    if (licenseConfig.type === 'annual_unlimited') {
-      expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
-    }
-    
-    // Create license in database
-    await db.query(`
-      INSERT INTO licenses (
-        license_key, license_type, status, customer_email, customer_name,
-        purchase_source, trial_expires, site_limit, kill_switch_enabled, 
-        resale_monitoring, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-    `, [
-      licenseKey,
-      licenseConfig.type,
-      'active',
-      customerEmail,
-      customerName,
-      'stripe_checkout',
-      expirationDate,
-      licenseConfig.siteLimit,
-      true,
-      true
-    ]);
-    
-    console.log('✅ License created in database');
-    
-    // Send license email via Pabbly
-    const pabblySuccess = await sendToPabbly(customerEmail, licenseKey, licenseConfig.type, {
-      customer_name: customerName,
-      purchase_amount: session.amount_total / 100,
-      currency: session.currency,
-      stripe_session_id: session.id
-    });
-    
-    console.log('📧 License email sent via Pabbly:', pabblySuccess);
-    
-    // Store email collection record
-    await db.query(`
-      INSERT INTO email_collection (
-        email, license_key, collection_source, license_type,
-        customer_name, sent_to_autoresponder, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-    `, [
-      customerEmail,
-      licenseKey,
-      'stripe_purchase',
-      licenseConfig.type,
-      customerName,
-      pabblySuccess
-    ]);
-    
-    console.log('✅ Checkout processing completed for:', customerEmail);
-    
-  } catch (error) {
-    console.error('❌ Checkout processing error:', error);
-    throw error;
-  }
-}
-
-// Handle payment succeeded (for one-time payments)
-async function handlePaymentSucceeded(paymentIntent) {
-  console.log('💳 Payment succeeded:', paymentIntent.id);
-  // Additional processing if needed
-}
-
-// Handle subscription payment (for monthly subscriptions)
-async function handleSubscriptionPayment(invoice) {
-  console.log('🔄 Subscription payment:', invoice.id);
-  
-  try {
-    const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
-    const customer = await stripe.customers.retrieve(subscription.customer);
-    
-    // Check if this is a renewal or new subscription
-    const existingLicense = await db.query(
-      'SELECT * FROM licenses WHERE customer_email = $1 AND license_type = $2',
-      [customer.email, 'professional']
-    );
-    
-    if (existingLicense.rows.length === 0) {
-      // New subscription - create license
-      await handleCheckoutCompleted({
-        customer_details: {
-          email: customer.email,
-          name: customer.name || 'Customer'
-        },
-        id: `sub_${subscription.id}`,
-        amount_total: invoice.amount_paid,
-        currency: invoice.currency
-      });
-    } else {
-      // Renewal - update existing license
-      await db.query(
-        'UPDATE licenses SET status = $1, trial_expires = NULL WHERE customer_email = $2 AND license_type = $3',
-        ['active', customer.email, 'professional']
-      );
-      console.log('✅ Subscription renewed for:', customer.email);
-    }
-    
-  } catch (error) {
-    console.error('❌ Subscription payment processing error:', error);
-    throw error;
-  }
-}
-
-// Handle subscription cancellation
-async function handleSubscriptionCancelled(subscription) {
-  console.log('❌ Subscription cancelled:', subscription.id);
-  
-  try {
-    const customer = await stripe.customers.retrieve(subscription.customer);
-    
-    // Deactivate license
-    await db.query(
-      'UPDATE licenses SET status = $1 WHERE customer_email = $2 AND license_type = $3',
-      ['cancelled', customer.email, 'professional']
-    );
-    
-    console.log('✅ License deactivated for cancelled subscription:', customer.email);
-    
-  } catch (error) {
-    console.error('❌ Subscription cancellation processing error:', error);
-    throw error;
-  }
-}
-
-// Get license configuration based on Stripe price/product ID
-function getLicenseConfig(priceId, productId) {
-  // Configure your Stripe price IDs here
-  const priceConfigs = {
-    // $35/month Professional (5 sites)
-    'price_professional_monthly': {
-      type: 'professional',
-      prefix: 'PRO',
-      siteLimit: 5
-    },
-    // $297 Lifetime Unlimited
-    'price_lifetime_unlimited': {
-      type: 'lifetime_unlimited',
-      prefix: 'LIFE',
-      siteLimit: -1
-    },
-    // $197/year Annual Unlimited (NEW PRODUCT)
-    'price_annual_unlimited': {
-      type: 'annual_unlimited',
-      prefix: 'ANN',
-      siteLimit: -1
-    }
-  };
-  
-  // Try to match by price ID first, then by product ID patterns
-  if (priceConfigs[priceId]) {
-    return priceConfigs[priceId];
-  }
-  
-  // Fallback: try to determine by product ID patterns
-  if (productId.includes('professional') || productId.includes('5site')) {
-    return priceConfigs['price_professional_monthly'];
-  } else if (productId.includes('lifetime') || productId.includes('297')) {
-    return priceConfigs['price_lifetime_unlimited'];
   } else if (productId.includes('annual') || productId.includes('197')) {
     return priceConfigs['price_annual_unlimited'];
   }
@@ -581,30 +345,7 @@ router.get('/setup-database', async (req, res) => {
       )
     `);
     
-    // Create indexes for better performance
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_site_usage_license ON site_usage(license_key)
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_site_usage_status ON site_usage(license_key, status)
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_site_usage_domain ON site_usage(site_domain)
-    `);
-    
-    // Update existing licenses with proper site limits based on license type
-    await db.query(`
-      UPDATE licenses 
-      SET site_limit = CASE 
-        WHEN license_type IN ('professional', '5sites') THEN 5
-        WHEN license_type IN ('annual_unlimited', 'lifetime_unlimited', 'unlimited') THEN -1
-        WHEN license_type = 'trial' THEN 5
-        ELSE 5
-      END
-      WHERE site_limit IS NULL
-    `);
-    
-    // Create email_collection table (if not exists)
+    // Create email_collection table
     await db.query(`
       CREATE TABLE IF NOT EXISTS email_collection (
         id SERIAL PRIMARY KEY,
@@ -613,361 +354,207 @@ router.get('/setup-database', async (req, res) => {
         collection_source VARCHAR(100),
         license_type VARCHAR(50),
         customer_name VARCHAR(255),
-        website_url VARCHAR(500),
+        website_url TEXT,
         sent_to_autoresponder BOOLEAN DEFAULT false,
         collected_at TIMESTAMP DEFAULT NOW()
       )
     `);
     
-    // Create plugin_installations table (if not exists)
+    // Create plugin_installations table
     await db.query(`
       CREATE TABLE IF NOT EXISTS plugin_installations (
         id SERIAL PRIMARY KEY,
         license_key VARCHAR(255) NOT NULL,
-        site_url VARCHAR(500) NOT NULL,
-        site_title VARCHAR(255),
+        site_url TEXT NOT NULL,
+        site_domain VARCHAR(255),
         wp_version VARCHAR(50),
-        php_version VARCHAR(50),
         plugin_version VARCHAR(50),
-        theme_name VARCHAR(255),
-        site_language VARCHAR(50),
-        site_timezone VARCHAR(100),
-        last_seen TIMESTAMP DEFAULT NOW(),
-        activation_count INTEGER DEFAULT 1,
-        is_active BOOLEAN DEFAULT true,
-        UNIQUE(license_key, site_url)
+        installation_date TIMESTAMP DEFAULT NOW(),
+        last_heartbeat TIMESTAMP DEFAULT NOW(),
+        status VARCHAR(50) DEFAULT 'active'
       )
     `);
     
-    console.log('✅ Database tables created successfully!');
+    console.log('✅ All database tables created successfully');
     
     res.json({
       success: true,
-      message: 'Database tables created successfully with site usage tracking!',
-      tables: ['licenses', 'site_usage', 'email_collection', 'plugin_installations'],
-      features: ['site_limit_enforcement', 'site_usage_tracking', 'performance_indexes']
+      message: 'Database setup completed successfully',
+      tables_created: [
+        'licenses (with site_limit column)',
+        'site_usage (for site tracking)',
+        'email_collection (for marketing)',
+        'plugin_installations (for analytics)'
+      ]
     });
     
   } catch (error) {
     console.error('❌ Database setup error:', error);
-    res.json({
+    res.status(500).json({
       success: false,
-      message: 'Database setup failed: ' + error.message,
-      error: error.message
+      message: 'Database setup failed: ' + error.message
     });
   }
 });
 
-// Core license validation endpoint - ENHANCED with site usage tracking
+// Enhanced license validation with comprehensive logging
 router.post('/validate-license', async (req, res) => {
   try {
-    const { licenseKey, siteUrl, pluginVersion, productCode, action } = req.body;
-
-    console.log(`License ${action} request:`, { licenseKey, siteUrl, action });
-
-    if (!licenseKey || !siteUrl || !action) {
+    const { licenseKey, siteUrl, action, pluginVersion } = req.body;
+    
+    console.log('🔍 License validation request:', { licenseKey, siteUrl, action });
+    
+    if (!licenseKey) {
       return res.json({
         success: false,
-        message: 'Missing required parameters'
+        message: 'License key is required'
       });
     }
-
-    // Handle different actions
-    switch (action) {
-      case 'check':
-        return await handleLicenseCheck(req, res);
-      case 'activate':
-        return await handleLicenseActivation(req, res);
-      case 'deactivate':
-        return await handleLicenseDeactivation(req, res);
-      default:
-        return res.json({
-          success: false,
-          message: 'Invalid action'
-        });
-    }
-  } catch (error) {
-    console.error('License validation error:', error);
-    res.json({
-      success: false,
-      message: 'Server error - please contact eBiz360 support'
-    });
-  }
-});
-
-// ENHANCED: Handle license check with site usage enforcement
-async function handleLicenseCheck(req, res) {
-  const { licenseKey, siteUrl, siteTitle, wpVersion, pluginVersion } = req.body;
-
-  try {
-    const result = await db.query(
+    
+    // Get license from database
+    const licenseResult = await db.query(
       'SELECT * FROM licenses WHERE license_key = $1',
       [licenseKey]
     );
-
-    if (result.rows.length === 0) {
+    
+    if (licenseResult.rows.length === 0) {
+      console.log('❌ License not found:', licenseKey);
       return res.json({
         success: false,
         message: 'Invalid license key'
       });
     }
-
-    const license = result.rows[0];
-
-    // Check if license is active
-    if (license.status !== 'active' && license.status !== 'trial') {
+    
+    const license = licenseResult.rows[0];
+    console.log('📋 License found:', license.license_type, license.status);
+    
+    // Check license status
+    if (license.status === 'cancelled' || license.status === 'expired') {
       return res.json({
         success: false,
-        message: 'License is not active'
+        message: `License is ${license.status}`
       });
     }
-
+    
     // Check trial expiration
-    if (license.status === 'trial') {
-      const trialEnd = new Date(license.created_at);
-      trialEnd.setDate(trialEnd.getDate() + 14);
-
-      if (new Date() > trialEnd) {
-        await db.query('UPDATE licenses SET status = $1 WHERE license_key = $2', ['expired', licenseKey]);
+    if (license.license_type === 'trial' && license.trial_expires) {
+      const now = new Date();
+      const expires = new Date(license.trial_expires);
+      
+      if (now > expires) {
+        await db.query(
+          'UPDATE licenses SET status = $1 WHERE license_key = $2',
+          ['expired', licenseKey]
+        );
+        
         return res.json({
           success: false,
-          message: 'Trial period has expired'
+          message: 'Trial license has expired'
         });
       }
     }
-
-    // ENHANCED: Check site limits and register site usage
-    const siteLimit = getSiteLimit(license);
     
-    if (siteLimit !== -1) { // Only check limits if not unlimited
-      // Prepare site data
-      const siteData = {
-        site_url: siteUrl,
+    // Get site limit for this license
+    const siteLimit = getSiteLimit(license);
+    console.log('🏠 Site limit for license:', siteLimit);
+    
+    // If we have a site URL, handle site registration/checking
+    if (siteUrl && action === 'check') {
+      // Generate site signature
+      const siteSignature = generateSiteSignature({
         site_domain: new URL(siteUrl).hostname,
-        site_title: siteTitle,
-        wp_version: wpVersion,
-        plugin_version: pluginVersion,
-        site_signature: crypto.createHash('md5').update(siteUrl + (process.env.SITE_SALT || 'default')).digest('hex')
-      };
+        site_path: new URL(siteUrl).pathname,
+        abspath: siteUrl
+      });
       
-      // Check if this site is already registered
-      const existingSite = await db.query(
+      // Check if site is already registered
+      const siteResult = await db.query(
         'SELECT * FROM site_usage WHERE license_key = $1 AND site_signature = $2',
-        [licenseKey, siteData.site_signature]
+        [licenseKey, siteSignature]
       );
       
-      if (existingSite.rows.length === 0) {
-        // New site - check if we're at the limit
-        const currentUsage = await db.query(
+      if (siteResult.rows.length === 0 && siteLimit > 0) {
+        // Site not registered, check if we're under the limit
+        const usageResult = await db.query(
           'SELECT COUNT(*) as count FROM site_usage WHERE license_key = $1 AND status = $2',
           [licenseKey, 'active']
         );
         
-        const currentCount = parseInt(currentUsage.rows[0].count);
+        const currentUsage = parseInt(usageResult.rows[0].count);
+        console.log('📊 Current site usage:', currentUsage, '/', siteLimit);
         
-        if (currentCount >= siteLimit) {
+        if (currentUsage >= siteLimit) {
           return res.json({
             success: false,
-            message: `Site limit exceeded. Your ${license.license_type} license allows ${siteLimit} sites. Currently using ${currentCount} sites.`,
-            error_code: 'SITE_LIMIT_EXCEEDED',
-            current_usage: currentCount,
-            site_limit: siteLimit,
-            upgrade_url: 'https://siteoverlay.24hr.pro/'
+            message: `Site limit exceeded. This license allows ${siteLimit} sites, but ${currentUsage} are already registered.`
           });
         }
         
         // Register the new site
+        await db.query(`
+          INSERT INTO site_usage (
+            license_key, site_signature, site_domain, site_url, site_data, status
+          ) VALUES ($1, $2, $3, $4, $5, $6)
+        `, [
+          licenseKey,
+          siteSignature,
+          new URL(siteUrl).hostname,
+          siteUrl,
+          JSON.stringify({ plugin_version: pluginVersion }),
+          'active'
+        ]);
+        
+        console.log('✅ New site registered:', siteUrl);
+      } else if (siteResult.rows.length > 0) {
+        // Update last seen for existing site
         await db.query(
-          `INSERT INTO site_usage (
-            license_key, site_signature, site_domain, site_url, 
-            site_data, status, registered_at, last_seen
-          ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-          [
-            licenseKey,
-            siteData.site_signature,
-            siteData.site_domain,
-            siteData.site_url,
-            JSON.stringify(siteData),
-            'active'
-          ]
-        );
-      } else {
-        // Update existing site
-        await db.query(
-          `UPDATE site_usage 
-           SET last_seen = NOW(), 
-               site_data = $3,
-               status = 'active'
-           WHERE license_key = $1 AND site_signature = $2`,
-          [licenseKey, siteData.site_signature, JSON.stringify(siteData)]
-        );
-      }
-    }
-
-    // Update installation tracking
-    await trackInstallation(licenseKey, siteUrl, req.body);
-
-    res.json({
-      success: true,
-      message: 'License is valid',
-      data: {
-        license_type: license.license_type,
-        status: license.status,
-        site_limit: siteLimit,
-        unlimited: siteLimit === -1,
-        expires: license.license_type === 'unlimited' ? 'Never' : null,
-        company: 'eBiz360'
-      }
-    });
-
-  } catch (error) {
-    console.error('License check error:', error);
-    res.json({
-      success: false,
-      message: 'Database error - please contact eBiz360 support'
-    });
-  }
-}
-
-// Handle license activation
-async function handleLicenseActivation(req, res) {
-  const { licenseKey, siteUrl } = req.body;
-
-  try {
-    const result = await db.query(
-      'SELECT * FROM licenses WHERE license_key = $1',
-      [licenseKey]
-    );
-
-    if (result.rows.length === 0) {
-      return res.json({
-        success: false,
-        message: 'Invalid license key'
-      });
-    }
-
-    const license = result.rows[0];
-
-    // Check if license can be activated
-    if (license.status === 'expired') {
-      return res.json({
-        success: false,
-        message: 'License has expired'
-      });
-    }
-
-    // Check site limit for professional licenses
-    const siteLimit = getSiteLimit(license);
-    
-    if (siteLimit !== -1) {
-      const installResult = await db.query(
-        'SELECT COUNT(*) as site_count FROM site_usage WHERE license_key = $1 AND status = $2',
-        [licenseKey, 'active']
-      );
-
-      const siteCount = parseInt(installResult.rows[0].site_count);
-      if (siteCount >= siteLimit) {
-        const siteSignature = crypto.createHash('md5').update(siteUrl + (process.env.SITE_SALT || 'default')).digest('hex');
-        const siteExists = await db.query(
-          'SELECT id FROM site_usage WHERE license_key = $1 AND site_signature = $2',
+          'UPDATE site_usage SET last_seen = NOW() WHERE license_key = $1 AND site_signature = $2',
           [licenseKey, siteSignature]
         );
-
-        if (siteExists.rows.length === 0) {
-          return res.json({
-            success: false,
-            message: `Site limit exceeded. ${license.license_type} license allows up to ${siteLimit} sites.`,
-            error_code: 'SITE_LIMIT_EXCEEDED'
-          });
-        }
       }
     }
-
-    // Track installation
-    await trackInstallation(licenseKey, siteUrl, req.body);
-
+    
+    // Track installation if plugin version provided
+    if (siteUrl && pluginVersion) {
+      await trackInstallation(licenseKey, siteUrl, { pluginVersion });
+    }
+    
+    // Get current site usage for response
+    const usageResult = await db.query(
+      'SELECT COUNT(*) as count FROM site_usage WHERE license_key = $1 AND status = $2',
+      [licenseKey, 'active']
+    );
+    
+    const currentUsage = parseInt(usageResult.rows[0].count);
+    
+    // Return success response
     res.json({
       success: true,
-      message: 'License activated successfully',
+      message: 'License validated successfully',
       data: {
+        license_key: licenseKey,
         license_type: license.license_type,
         status: license.status,
+        customer_name: license.customer_name,
+        licensed_to: license.customer_name,
+        expires: license.trial_expires || 'Never',
         site_limit: siteLimit,
-        unlimited: siteLimit === -1,
-        expires: license.license_type === 'unlimited' ? 'Never' : null,
-        company: 'eBiz360'
+        sites_used: currentUsage,
+        sites_remaining: siteLimit > 0 ? Math.max(0, siteLimit - currentUsage) : 'Unlimited',
+        company: 'eBiz360',
+        validation_source: 'railway_api',
+        last_validated: new Date().toISOString()
       }
     });
-
+    
   } catch (error) {
-    console.error('License activation error:', error);
+    console.error('❌ License validation error:', error);
     res.json({
       success: false,
-      message: 'Activation failed - please contact eBiz360 support'
+      message: 'Validation failed - please contact support'
     });
   }
-}
-
-// Handle license deactivation
-async function handleLicenseDeactivation(req, res) {
-  const { licenseKey, siteUrl } = req.body;
-
-  try {
-    // Mark installation as inactive
-    await db.query(
-      'UPDATE plugin_installations SET is_active = false WHERE license_key = $1 AND site_url = $2',
-      [licenseKey, siteUrl]
-    );
-
-    // Mark site usage as inactive
-    const siteSignature = crypto.createHash('md5').update(siteUrl + (process.env.SITE_SALT || 'default')).digest('hex');
-    await db.query(
-      'UPDATE site_usage SET status = $3, deactivated_at = NOW() WHERE license_key = $1 AND site_signature = $2',
-      [licenseKey, siteSignature, 'inactive']
-    );
-
-    res.json({
-      success: true,
-      message: 'License deactivated successfully'
-    });
-
-  } catch (error) {
-    console.error('License deactivation error:', error);
-    res.json({
-      success: false,
-      message: 'Deactivation failed - please contact eBiz360 support'
-    });
-  }
-}
-
-// Track plugin installation
-async function trackInstallation(licenseKey, siteUrl, data) {
-  try {
-    await db.query(`
-      INSERT INTO plugin_installations (
-        license_key, site_url, site_title, wp_version, php_version, 
-        plugin_version, theme_name, site_language, site_timezone, last_seen
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-      ON CONFLICT (license_key, site_url) 
-      DO UPDATE SET 
-        last_seen = NOW(),
-        activation_count = plugin_installations.activation_count + 1,
-        is_active = true
-    `, [
-      licenseKey,
-      siteUrl,
-      data.siteTitle || null,
-      data.wpVersion || null,
-      data.phpVersion || null,
-      data.pluginVersion || null,
-      data.themeName || null,
-      data.siteLanguage || null,
-      data.siteTimezone || null
-    ]);
-  } catch (error) {
-    console.error('Installation tracking error:', error);
-  }
-}
+});
 
 // Start trial endpoint
 router.post('/start-trial', async (req, res) => {
@@ -1187,7 +774,6 @@ router.post('/request-trial', async (req, res) => {
       data: {
         email: email,
         customer_name: full_name,
-        license_key: trialLicenseKey,
         expires: trialExpires.toISOString(),
         pabbly_status: pabblySuccess ? 'email_sent' : 'email_pending'
       }
@@ -1197,57 +783,58 @@ router.post('/request-trial', async (req, res) => {
     console.error('❌ Unexpected trial request error:', error);
     res.json({
       success: false,
-      message: 'Unexpected error: ' + error.message
+      message: 'Failed to process trial request - please contact support'
     });
   }
 });
 
-// Enhanced email collection endpoint
+// Email collection endpoint for newsletter signups
 router.post('/collect-email', async (req, res) => {
   try {
-    const { email, source, licenseKey, siteUrl, tags } = req.body;
+    const { email, source, customer_name, license_type, website_url } = req.body;
 
-    if (!email) {
-      return res.json({
-        success: false,
-        message: 'Email is required'
-      });
-    }
-
-    // Validate email format
+    // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!email || !emailRegex.test(email)) {
       return res.json({
         success: false,
-        message: 'Please enter a valid email address'
+        message: 'Valid email address is required'
       });
     }
+
+    // Generate license key for newsletter if not provided
+    const licenseKey = license_type ? 'NEWS-' + generateLicenseKey() : null;
 
     // Store email collection
     await db.query(`
       INSERT INTO email_collection (
-        email, license_key, site_url, collection_source, tags, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
-      ON CONFLICT (email, license_key) 
-      DO UPDATE SET collection_source = $4, tags = $5, collected_at = NOW()
+        email, license_key, collection_source, license_type,
+        customer_name, website_url, sent_to_autoresponder, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
     `, [
-      email, 
-      licenseKey || null, 
-      siteUrl || null, 
-      source || 'newsletter_signup',
-      JSON.stringify(tags || ['newsletter'])
+      email,
+      licenseKey,
+      source || 'newsletter',
+      license_type || 'newsletter',
+      customer_name || '',
+      website_url || '',
+      false
     ]);
 
-    // Send to Pabbly for newsletter signup
+    // Send to Pabbly Connect for newsletter
     const pabblySuccess = await sendToPabbly(email, licenseKey || 'newsletter', 'newsletter', {
-      source: source || 'newsletter_signup',
-      site_url: siteUrl
+      customer_name: customer_name || '',
+      website_url: website_url || '',
+      collection_source: source || 'newsletter'
     });
 
     res.json({
       success: true,
-      message: 'Email collected successfully! Check your inbox for confirmation.',
-      pabbly_status: pabblySuccess ? 'sent' : 'logged'
+      message: 'Email collected successfully',
+      data: {
+        email: email,
+        pabbly_status: pabblySuccess ? 'sent' : 'pending'
+      }
     });
 
   } catch (error) {
@@ -1259,298 +846,285 @@ router.post('/collect-email', async (req, res) => {
   }
 });
 
-// NEW SITE USAGE TRACKING ENDPOINTS
-
-// POST /api/register-site-usage - Register site usage for a license
+// Register site usage endpoint
 router.post('/register-site-usage', async (req, res) => {
   try {
-    const { license_key, site_data, action } = req.body;
-    
-    if (!license_key || !site_data) {
+    const { licenseKey, siteUrl, siteData } = req.body;
+
+    if (!licenseKey || !siteUrl) {
       return res.json({
         success: false,
-        message: 'Missing required parameters'
+        message: 'License key and site URL are required'
       });
     }
-    
-    console.log(`Site registration request for license: ${license_key}`);
-    
-    // Get license information
+
+    // Get license to check limits
     const licenseResult = await db.query(
       'SELECT * FROM licenses WHERE license_key = $1',
-      [license_key]
+      [licenseKey]
     );
-    
+
     if (licenseResult.rows.length === 0) {
       return res.json({
         success: false,
-        message: 'License not found'
+        message: 'Invalid license key'
       });
     }
-    
+
     const license = licenseResult.rows[0];
     const siteLimit = getSiteLimit(license);
-    
+
     // Generate site signature
-    const siteSignature = site_data.site_signature || generateSiteSignature(site_data);
-    
-    // Check if site is already registered
+    const siteSignature = generateSiteSignature({
+      site_domain: new URL(siteUrl).hostname,
+      site_path: new URL(siteUrl).pathname,
+      abspath: siteUrl
+    });
+
+    // Check if site already registered
     const existingSite = await db.query(
       'SELECT * FROM site_usage WHERE license_key = $1 AND site_signature = $2',
-      [license_key, siteSignature]
+      [licenseKey, siteSignature]
     );
-    
+
     if (existingSite.rows.length > 0) {
-      // Update existing site registration
+      // Update existing site
       await db.query(
-        `UPDATE site_usage 
-         SET last_seen = NOW(), 
-             site_data = $3,
-             status = 'active'
-         WHERE license_key = $1 AND site_signature = $2`,
-        [license_key, siteSignature, JSON.stringify(site_data)]
+        'UPDATE site_usage SET last_seen = NOW(), site_data = $1 WHERE license_key = $2 AND site_signature = $3',
+        [JSON.stringify(siteData || {}), licenseKey, siteSignature]
       );
-      
+
       return res.json({
         success: true,
-        message: 'Site registration updated'
+        message: 'Site registration updated',
+        data: { site_signature: siteSignature }
       });
     }
-    
-    // Check site limit (unlimited = -1)
-    if (siteLimit !== -1) {
-      const currentUsage = await db.query(
+
+    // Check site limit for new registration
+    if (siteLimit > 0) {
+      const usageResult = await db.query(
         'SELECT COUNT(*) as count FROM site_usage WHERE license_key = $1 AND status = $2',
-        [license_key, 'active']
+        [licenseKey, 'active']
       );
-      
-      const currentCount = parseInt(currentUsage.rows[0].count);
-      
-      if (currentCount >= siteLimit) {
+
+      const currentUsage = parseInt(usageResult.rows[0].count);
+
+      if (currentUsage >= siteLimit) {
         return res.json({
           success: false,
-          message: `Site limit exceeded. License allows ${siteLimit} sites, currently using ${currentCount}.`,
-          error_code: 'SITE_LIMIT_EXCEEDED',
-          current_usage: currentCount,
-          site_limit: siteLimit
+          message: `Site limit exceeded. This license allows ${siteLimit} sites.`
         });
       }
     }
-    
+
     // Register new site
-    await db.query(
-      `INSERT INTO site_usage (
-        license_key, site_signature, site_domain, site_url, 
-        site_data, status, registered_at, last_seen
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-      [
-        license_key,
-        siteSignature,
-        site_data.site_domain || '',
-        site_data.site_url || '',
-        JSON.stringify(site_data),
-        'active'
-      ]
-    );
-    
-    console.log(`✅ Site registered successfully for license: ${license_key}`);
-    
+    await db.query(`
+      INSERT INTO site_usage (
+        license_key, site_signature, site_domain, site_url, site_data, status
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+    `, [
+      licenseKey,
+      siteSignature,
+      new URL(siteUrl).hostname,
+      siteUrl,
+      JSON.stringify(siteData || {}),
+      'active'
+    ]);
+
     res.json({
       success: true,
       message: 'Site registered successfully',
-      site_signature: siteSignature
+      data: { site_signature: siteSignature }
     });
-    
+
   } catch (error) {
     console.error('Site registration error:', error);
     res.json({
       success: false,
-      message: 'Site registration failed: ' + error.message
+      message: 'Failed to register site'
     });
   }
 });
 
-// POST /api/unregister-site-usage - Unregister site usage
+// Unregister site usage endpoint
 router.post('/unregister-site-usage', async (req, res) => {
   try {
-    const { license_key, site_data } = req.body;
-    
-    if (!license_key || !site_data) {
+    const { licenseKey, siteUrl } = req.body;
+
+    if (!licenseKey || !siteUrl) {
       return res.json({
         success: false,
-        message: 'Missing required parameters'
+        message: 'License key and site URL are required'
       });
     }
-    
-    const siteSignature = site_data.site_signature || generateSiteSignature(site_data);
-    
-    // Mark site as inactive
+
+    // Generate site signature
+    const siteSignature = generateSiteSignature({
+      site_domain: new URL(siteUrl).hostname,
+      site_path: new URL(siteUrl).pathname,
+      abspath: siteUrl
+    });
+
+    // Deactivate site
     await db.query(
-      `UPDATE site_usage 
-       SET status = 'inactive', 
-           deactivated_at = NOW() 
-       WHERE license_key = $1 AND site_signature = $2`,
-      [license_key, siteSignature]
+      'UPDATE site_usage SET status = $1, deactivated_at = NOW() WHERE license_key = $2 AND site_signature = $3',
+      ['deactivated', licenseKey, siteSignature]
     );
-    
-    console.log(`✅ Site unregistered for license: ${license_key}`);
-    
+
     res.json({
       success: true,
       message: 'Site unregistered successfully'
     });
-    
+
   } catch (error) {
     console.error('Site unregistration error:', error);
     res.json({
       success: false,
-      message: 'Site unregistration failed: ' + error.message
+      message: 'Failed to unregister site'
     });
   }
 });
 
-// GET /api/license-usage/:license_key - Get site usage for a license
+// Get license usage endpoint
 router.get('/license-usage/:license_key', async (req, res) => {
   try {
     const { license_key } = req.params;
-    
-    // Get license information
+
+    // Get license info
     const licenseResult = await db.query(
       'SELECT * FROM licenses WHERE license_key = $1',
       [license_key]
     );
-    
+
     if (licenseResult.rows.length === 0) {
       return res.json({
         success: false,
         message: 'License not found'
       });
     }
-    
+
     const license = licenseResult.rows[0];
     const siteLimit = getSiteLimit(license);
-    
-    // Get active sites
-    const activeSites = await db.query(
-      `SELECT * FROM site_usage 
-       WHERE license_key = $1 AND status = 'active' 
-       ORDER BY registered_at DESC`,
+
+    // Get site usage
+    const usageResult = await db.query(
+      'SELECT * FROM site_usage WHERE license_key = $1 ORDER BY registered_at DESC',
       [license_key]
     );
-    
-    const sites = activeSites.rows.map(site => ({
-      domain: site.site_domain,
-      url: site.site_url,
-      registered_at: site.registered_at,
-      last_seen: site.last_seen,
-      signature: site.site_signature,
-      site_data: site.site_data
-    }));
-    
+
+    const activeSites = usageResult.rows.filter(site => site.status === 'active');
+
     res.json({
       success: true,
       data: {
         license_key: license_key,
         license_type: license.license_type,
-        sites_used: activeSites.rows.length,
         site_limit: siteLimit,
-        unlimited: siteLimit === -1,
-        registered_sites: sites.map(s => s.signature),
-        site_details: sites
+        sites_used: activeSites.length,
+        sites_remaining: siteLimit > 0 ? Math.max(0, siteLimit - activeSites.length) : 'Unlimited',
+        sites: usageResult.rows.map(site => ({
+          domain: site.site_domain,
+          url: site.site_url,
+          status: site.status,
+          registered_at: site.registered_at,
+          last_seen: site.last_seen
+        }))
       }
     });
-    
+
   } catch (error) {
-    console.error('Get license usage error:', error);
+    console.error('License usage error:', error);
     res.json({
       success: false,
-      message: 'Failed to get usage data: ' + error.message
+      message: 'Failed to get license usage'
     });
   }
 });
 
-// ADMIN API ENDPOINTS
-
-// POST /api/admin/remove-site - Remove specific site from license
+// Admin endpoint to remove a site from a license
 router.post('/admin/remove-site', async (req, res) => {
   try {
-    const { license_key, site_signature, admin_key } = req.body;
-    
-    // TODO: Add admin authentication
-    // if (!admin_key || admin_key !== process.env.ADMIN_API_KEY) {
-    //   return res.json({ success: false, message: 'Unauthorized' });
-    // }
-    
+    const { licenseKey, siteSignature, adminKey } = req.body;
+
+    // Simple admin key check (replace with proper authentication)
+    if (adminKey !== process.env.ADMIN_KEY) {
+      return res.json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
     await db.query(
-      `UPDATE site_usage 
-       SET status = 'removed_by_admin', 
-           deactivated_at = NOW() 
-       WHERE license_key = $1 AND site_signature = $2`,
-      [license_key, site_signature]
+      'UPDATE site_usage SET status = $1, deactivated_at = NOW() WHERE license_key = $2 AND site_signature = $3',
+      ['removed_by_admin', licenseKey, siteSignature]
     );
-    
+
     res.json({
       success: true,
       message: 'Site removed successfully'
     });
-    
+
   } catch (error) {
     console.error('Admin remove site error:', error);
     res.json({
       success: false,
-      message: 'Failed to remove site: ' + error.message
+      message: 'Failed to remove site'
     });
   }
 });
 
-// POST /api/admin/reset-site-usage - Reset all site usage for a license
+// Admin endpoint to reset site usage for a license
 router.post('/admin/reset-site-usage', async (req, res) => {
   try {
-    const { license_key, admin_key } = req.body;
-    
-    // TODO: Add admin authentication
-    // if (!admin_key || admin_key !== process.env.ADMIN_API_KEY) {
-    //   return res.json({ success: false, message: 'Unauthorized' });
-    // }
-    
+    const { licenseKey, adminKey } = req.body;
+
+    // Simple admin key check (replace with proper authentication)
+    if (adminKey !== process.env.ADMIN_KEY) {
+      return res.json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
     await db.query(
-      `UPDATE site_usage 
-       SET status = 'reset_by_admin', 
-           deactivated_at = NOW() 
-       WHERE license_key = $1 AND status = 'active'`,
-      [license_key]
+      'UPDATE site_usage SET status = $1, deactivated_at = NOW() WHERE license_key = $2',
+      ['reset_by_admin', licenseKey]
     );
-    
+
     res.json({
       success: true,
       message: 'Site usage reset successfully'
     });
-    
+
   } catch (error) {
-    console.error('Admin reset site usage error:', error);
+    console.error('Admin reset usage error:', error);
     res.json({
       success: false,
-      message: 'Failed to reset site usage: ' + error.message
+      message: 'Failed to reset site usage'
     });
   }
 });
 
-// POST /api/admin/update-license - Update license properties
+// Admin endpoint to update license details
 router.post('/admin/update-license', async (req, res) => {
   try {
-    const { license_key, updates, admin_key } = req.body;
-    
-    // TODO: Add admin authentication
-    // if (!admin_key || admin_key !== process.env.ADMIN_API_KEY) {
-    //   return res.json({ success: false, message: 'Unauthorized' });
-    // }
-    
-    // Build dynamic update query based on provided updates
-    const allowedFields = ['site_limit', 'status', 'license_type', 'customer_name', 'customer_email'];
+    const { licenseKey, updates, adminKey } = req.body;
+
+    // Simple admin key check (replace with proper authentication)
+    if (adminKey !== process.env.ADMIN_KEY) {
+      return res.json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    // Build update query dynamically
+    const allowedFields = ['license_type', 'status', 'customer_email', 'customer_name', 'site_limit', 'trial_expires'];
     const updateFields = [];
     const updateValues = [];
-    let paramIndex = 2;
-    
+    let paramIndex = 1;
+
     for (const [field, value] of Object.entries(updates)) {
       if (allowedFields.includes(field)) {
         updateFields.push(`${field} = $${paramIndex}`);
@@ -1558,56 +1132,70 @@ router.post('/admin/update-license', async (req, res) => {
         paramIndex++;
       }
     }
-    
+
     if (updateFields.length === 0) {
       return res.json({
         success: false,
         message: 'No valid fields to update'
       });
     }
-    
-    const query = `UPDATE licenses SET ${updateFields.join(', ')} WHERE license_key = $1`;
-    await db.query(query, [license_key, ...updateValues]);
-    
+
+    updateValues.push(licenseKey);
+    const query = `UPDATE licenses SET ${updateFields.join(', ')} WHERE license_key = $${paramIndex}`;
+
+    await db.query(query, updateValues);
+
     res.json({
       success: true,
-      message: 'License updated successfully',
-      updated_fields: Object.keys(updates)
+      message: 'License updated successfully'
     });
-    
+
   } catch (error) {
     console.error('Admin update license error:', error);
     res.json({
       success: false,
-      message: 'Failed to update license: ' + error.message
+      message: 'Failed to update license'
     });
   }
 });
 
-// GET /api/admin/licenses - Get all licenses with usage data
+// Admin endpoint to list all licenses
 router.get('/admin/licenses', async (req, res) => {
   try {
-    // Get all licenses
-    const licenses = await db.query(`
-      SELECT l.*, 
-             COUNT(su.id) as active_sites,
-             MAX(su.last_seen) as last_site_activity
+    const { adminKey } = req.query;
+
+    // Simple admin key check (replace with proper authentication)
+    if (adminKey !== process.env.ADMIN_KEY) {
+      return res.json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    const result = await db.query(`
+      SELECT 
+        l.*,
+        COUNT(su.id) FILTER (WHERE su.status = 'active') as active_sites
       FROM licenses l
-      LEFT JOIN site_usage su ON l.license_key = su.license_key AND su.status = 'active'
-      GROUP BY l.id, l.license_key
+      LEFT JOIN site_usage su ON l.license_key = su.license_key
+      GROUP BY l.id
       ORDER BY l.created_at DESC
     `);
-    
+
     res.json({
       success: true,
-      data: licenses.rows
+      data: result.rows.map(license => ({
+        ...license,
+        site_limit: getSiteLimit(license),
+        active_sites: parseInt(license.active_sites) || 0
+      }))
     });
-    
+
   } catch (error) {
-    console.error('Admin get licenses error:', error);
+    console.error('Admin list licenses error:', error);
     res.json({
       success: false,
-      message: 'Failed to get licenses: ' + error.message
+      message: 'Failed to list licenses'
     });
   }
 });
@@ -1676,35 +1264,55 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
 // Fix database structure - add missing created_at column
 router.get('/fix-database', async (req, res) => {
   try {
-    console.log('Fixing database structure...');
-    
-    // Add missing created_at column to licenses table
+    // Fix any missing columns or constraints
     await db.query(`
       ALTER TABLE licenses 
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
     `);
     
-    // Update existing records without created_at
     await db.query(`
       UPDATE licenses 
       SET created_at = NOW() 
       WHERE created_at IS NULL
     `);
-    
-    console.log('✅ Database structure fixed!');
-    
+
     res.json({
       success: true,
-      message: 'Database structure fixed successfully!'
+      message: 'Database structure fixed'
     });
-    
+
   } catch (error) {
-    console.error('❌ Database fix error:', error);
+    console.error('Database fix error:', error);
     res.json({
       success: false,
-      message: 'Database fix failed: ' + error.message
+      message: 'Failed to fix database: ' + error.message
     });
   }
 });
+
+// Helper function to track plugin installations
+async function trackInstallation(licenseKey, siteUrl, installationData = {}) {
+  try {
+    const domain = new URL(siteUrl).hostname;
+    
+    await db.query(`
+      INSERT INTO plugin_installations (
+        license_key, site_url, site_domain, wp_version, plugin_version
+      ) VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (license_key, site_url) 
+      DO UPDATE SET last_heartbeat = NOW()
+    `, [
+      licenseKey,
+      siteUrl,
+      domain,
+      installationData.wpVersion || null,
+      installationData.pluginVersion || null
+    ]);
+
+  } catch (error) {
+    console.error('Installation tracking error:', error);
+    // Don't fail the main request for tracking errors
+  }
+}
 
 module.exports = router;
