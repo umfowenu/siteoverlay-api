@@ -44,6 +44,12 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
       case 'customer.subscription.deleted':
         await handleSubscriptionCancelled(event.data.object);
         break;
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(event.data.object);
+        break;
+      case 'invoice.payment_failed':
+        await handlePaymentFailed(event.data.object);
+        break;
       default:
         console.log(`Unhandled event type ${event.type}`);
     }
@@ -155,7 +161,7 @@ async function handlePaymentSucceeded(paymentIntent) {
   // Additional processing if needed
 }
 
-// Handle subscription payment (for monthly subscriptions)
+// Handle subscription payment (for monthly and annual subscriptions)
 async function handleSubscriptionPayment(invoice) {
   console.log('🔄 Subscription payment:', invoice.id);
   
@@ -163,10 +169,23 @@ async function handleSubscriptionPayment(invoice) {
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
     const customer = await stripe.customers.retrieve(subscription.customer);
     
+    // Get the price ID to determine license type
+    const priceId = subscription.items.data[0]?.price?.id;
+    const productId = subscription.items.data[0]?.price?.product?.id;
+    
+    // Determine license type based on price/product
+    const licenseConfig = getLicenseConfig(priceId, productId);
+    if (!licenseConfig) {
+      console.error('❌ Unknown subscription product:', { priceId, productId });
+      return;
+    }
+    
+    console.log('📦 Processing subscription for license type:', licenseConfig.type);
+    
     // Check if this is a renewal or new subscription
     const existingLicense = await db.query(
       'SELECT * FROM licenses WHERE customer_email = $1 AND license_type = $2',
-      [customer.email, 'professional']
+      [customer.email, licenseConfig.type]
     );
     
     if (existingLicense.rows.length === 0) {
@@ -184,9 +203,9 @@ async function handleSubscriptionPayment(invoice) {
       // Renewal - update existing license
       await db.query(
         'UPDATE licenses SET status = $1, trial_expires = NULL WHERE customer_email = $2 AND license_type = $3',
-        ['active', customer.email, 'professional']
+        ['active', customer.email, licenseConfig.type]
       );
-      console.log('✅ Subscription renewed for:', customer.email);
+      console.log('✅ Subscription renewed for:', customer.email, 'license type:', licenseConfig.type);
     }
     
   } catch (error) {
@@ -202,16 +221,108 @@ async function handleSubscriptionCancelled(subscription) {
   try {
     const customer = await stripe.customers.retrieve(subscription.customer);
     
+    // Get the price ID to determine license type
+    const priceId = subscription.items.data[0]?.price?.id;
+    const productId = subscription.items.data[0]?.price?.product?.id;
+    
+    // Determine license type based on price/product
+    const licenseConfig = getLicenseConfig(priceId, productId);
+    if (!licenseConfig) {
+      console.error('❌ Unknown subscription product for cancellation:', { priceId, productId });
+      return;
+    }
+    
+    console.log('📦 Cancelling subscription for license type:', licenseConfig.type);
+    
     // Deactivate license
     await db.query(
       'UPDATE licenses SET status = $1 WHERE customer_email = $2 AND license_type = $3',
-      ['cancelled', customer.email, 'professional']
+      ['cancelled', customer.email, licenseConfig.type]
     );
     
-    console.log('✅ License deactivated for cancelled subscription:', customer.email);
+    console.log('✅ License deactivated for cancelled subscription:', customer.email, 'license type:', licenseConfig.type);
     
   } catch (error) {
     console.error('❌ Subscription cancellation processing error:', error);
+    throw error;
+  }
+}
+
+// Handle subscription updates (e.g., plan changes, billing cycle changes)
+async function handleSubscriptionUpdated(subscription) {
+  console.log('🔄 Subscription updated:', subscription.id);
+  
+  try {
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    
+    // Get the price ID to determine license type
+    const priceId = subscription.items.data[0]?.price?.id;
+    const productId = subscription.items.data[0]?.price?.product?.id;
+    
+    // Determine license type based on price/product
+    const licenseConfig = getLicenseConfig(priceId, productId);
+    if (!licenseConfig) {
+      console.error('❌ Unknown subscription product for update:', { priceId, productId });
+      return;
+    }
+    
+    console.log('📦 Updating subscription for license type:', licenseConfig.type);
+    
+    // Update license status and expiration if needed
+    if (subscription.status === 'active') {
+      // For annual subscriptions, update expiration date
+      let expirationDate = null;
+      if (licenseConfig.type === 'annual_unlimited') {
+        // Set expiration to 1 year from now for annual subscriptions
+        expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+      }
+      
+      await db.query(
+        'UPDATE licenses SET status = $1, trial_expires = $2 WHERE customer_email = $3 AND license_type = $4',
+        ['active', expirationDate, customer.email, licenseConfig.type]
+      );
+      
+      console.log('✅ License updated for subscription:', customer.email, 'license type:', licenseConfig.type);
+    }
+    
+  } catch (error) {
+    console.error('❌ Subscription update processing error:', error);
+    throw error;
+  }
+}
+
+// Handle payment failures
+async function handlePaymentFailed(invoice) {
+  console.log('💳 Payment failed:', invoice.id);
+  
+  try {
+    const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    
+    // Get the price ID to determine license type
+    const priceId = subscription.items.data[0]?.price?.id;
+    const productId = subscription.items.data[0]?.price?.product?.id;
+    
+    // Determine license type based on price/product
+    const licenseConfig = getLicenseConfig(priceId, productId);
+    if (!licenseConfig) {
+      console.error('❌ Unknown subscription product for payment failure:', { priceId, productId });
+      return;
+    }
+    
+    console.log('📦 Payment failed for license type:', licenseConfig.type);
+    
+    // Optionally suspend the license temporarily
+    // You might want to implement a grace period before fully deactivating
+    await db.query(
+      'UPDATE licenses SET status = $1 WHERE customer_email = $2 AND license_type = $3',
+      ['payment_failed', customer.email, licenseConfig.type]
+    );
+    
+    console.log('⚠️ License suspended due to payment failure:', customer.email, 'license type:', licenseConfig.type);
+    
+  } catch (error) {
+    console.error('❌ Payment failure processing error:', error);
     throw error;
   }
 }
@@ -436,8 +547,8 @@ router.post('/validate-license', async (req, res) => {
       });
     }
     
-    // Check trial expiration
-    if (license.license_type === 'trial' && license.trial_expires) {
+    // Check license expiration (for trial and annual subscriptions)
+    if (license.trial_expires) {
       const now = new Date();
       const expires = new Date(license.trial_expires);
       
@@ -447,10 +558,17 @@ router.post('/validate-license', async (req, res) => {
           ['expired', licenseKey]
         );
         
-        return res.json({
-          success: false,
-          message: 'Trial license has expired'
-        });
+        if (license.license_type === 'trial') {
+          return res.json({
+            success: false,
+            message: 'Trial license has expired'
+          });
+        } else if (license.license_type === 'annual_unlimited') {
+          return res.json({
+            success: false,
+            message: 'Annual subscription has expired. Please renew to continue using SiteOverlay Pro.'
+          });
+        }
       }
     }
     
