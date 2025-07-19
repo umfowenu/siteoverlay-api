@@ -1,0 +1,159 @@
+# SiteOverlay Pro - Development Rules
+
+## CONSTITUTIONAL RULES (CRITICAL - NEVER VIOLATE)
+
+### 1. NON-BLOCKING LICENSE SYSTEM
+- License validation must NEVER block core plugin functionality
+- All license checks run in background with short timeouts
+- Plugin works fully even if licensing server is down
+- Core overlay functionality is always available
+
+### 2. MODULAR ARCHITECTURE
+- All new features must be separate, optional modules
+- License manager is enhancement-only, not core dependency
+- Each class should be self-contained and optional
+- Graceful degradation when modules are unavailable
+
+### 3. BACKGROUND OPERATIONS ONLY
+- Site tracking runs in background with wp_cron
+- Never block user interface for license operations
+- Use non-blocking HTTP requests with short timeouts
+- Cache license status locally for offline operation
+
+### 4. GRACEFUL DEGRADATION
+- Plugin functions normally without license validation
+- Show warnings/notices only, never block functionality
+- Provide fallback behavior for all license checks
+- Handle API failures silently with local caching
+
+### 5. USER EXPERIENCE PRIORITY
+- Never interrupt user workflow for license issues
+- License prompts are informational only
+- Core features work regardless of license status
+- Admin notices are dismissible and non-intrusive
+
+## DEVELOPMENT GUIDELINES
+
+### Code Structure
+- Use WordPress hooks and filters appropriately
+- Follow WordPress coding standards
+- Add comprehensive error handling
+- Include detailed logging for debugging
+
+### Database Operations
+- Use prepared statements for all queries
+- Handle database errors gracefully
+- Implement proper indexing for performance
+- Use WordPress database abstraction layer
+
+### API Communication
+- Always use short timeouts (5-10 seconds max)
+- Implement proper error handling and retries
+- Use non-blocking requests where possible
+- Cache API responses to reduce server load
+
+### Security
+- Validate and sanitize all inputs
+- Use WordPress nonces for forms
+- Implement proper capability checks
+- Follow WordPress security best practices
+
+## SPECIFIC IMPLEMENTATION RULES
+
+### Site Tracking
+- Generate unique site signatures using WordPress salts
+- Track usage in background only
+- Never block plugin activation for tracking
+- Handle tracking failures silently
+
+### License Enforcement
+- Professional plan: 5 sites (soft limit with warnings)
+- Annual/Lifetime: Unlimited sites
+- Enforcement through notices, not blocking
+- Allow grace periods for limit violations
+
+### Background Tasks
+- Use wp_cron for scheduled operations
+- Implement heartbeat system for site verification
+- Handle cron failures gracefully
+- Provide manual trigger options for debugging
+
+## FILE ORGANIZATION
+
+### Core Files (DO NOT MODIFY HEAVILY)
+- `siteoverlay-pro.php` - Main plugin file
+- Core overlay functionality files
+
+### Enhancement Files (SAFE TO MODIFY)
+- `includes/class-license-manager.php` - License management
+- `includes/class-site-tracker.php` - Site usage tracking
+- `includes/class-admin-dashboard.php` - Admin interface
+- `assets/js/admin.js` - Admin JavaScript
+- `assets/css/admin.css` - Admin styling
+
+### API Files
+- `railway-api/routes.js` - API endpoints
+- Database schema files
+
+## TESTING REQUIREMENTS
+
+### Before Any Commit
+- Test with no internet connection
+- Test with licensing server down
+- Test with invalid license keys
+- Test plugin activation/deactivation
+- Verify core functionality works without license
+
+### Integration Testing
+- Test all license types (trial, professional, lifetime, annual)
+- Test site limit enforcement
+- Test background operations
+- Test admin interface functionality
+
+## ERROR HANDLING
+
+### License Validation Errors
+- Log errors for debugging
+- Show user-friendly messages
+- Provide fallback behavior
+- Never crash or block functionality
+
+### API Communication Errors
+- Handle timeouts gracefully
+- Implement exponential backoff
+- Cache last known good state
+- Provide offline mode functionality
+
+### Database Errors
+- Handle connection failures
+- Implement proper error logging
+- Provide fallback data sources
+- Never lose user data
+
+## PERFORMANCE CONSIDERATIONS
+
+### Background Operations
+- Use efficient database queries
+- Implement proper caching
+- Avoid blocking the main thread
+- Use WordPress transients for temporary data
+
+### Admin Interface
+- Load assets only when needed
+- Implement lazy loading where appropriate
+- Optimize database queries
+- Use WordPress admin best practices
+
+## DEPLOYMENT CHECKLIST
+
+### Before Release
+- [ ] All constitutional rules followed
+- [ ] Background operations tested
+- [ ] Graceful degradation verified
+- [ ] Error handling comprehensive
+- [ ] Performance optimized
+- [ ] Security reviewed
+- [ ] WordPress standards compliance
+- [ ] Documentation updated
+
+Remember: The plugin must work perfectly even if the licensing system completely fails. License management is an enhancement, not a requirement for core functionality.
