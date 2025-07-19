@@ -6,8 +6,8 @@ const crypto = require('crypto');
 
 // Stripe integration with test/live mode support
 const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
-const stripeSecretKey = isTestMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
-const webhookSecret = isTestMode ? process.env.STRIPE_TEST_WEBHOOK_SECRET : process.env.STRIPE_WEBHOOK_SECRET;
+const stripeSecretKey = isTestMode ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY;
+const webhookSecret = isTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET;
 
 const stripe = require('stripe')(stripeSecretKey);
 
@@ -339,19 +339,28 @@ async function handlePaymentFailed(invoice) {
 function getLicenseConfig(priceId, productId) {
   const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
   
+  // Get price IDs from environment variables
+  const test5SitePrice = process.env.STRIPE_PRICE_ID_5SITE_TEST;
+  const testAnnualPrice = process.env.STRIPE_PRICE_ID_ANNUAL_TEST;
+  const testUnlimitedPrice = process.env.STRIPE_PRICE_ID_UNLIMITED_TEST;
+  
+  const live5SitePrice = process.env.STRIPE_PRICE_ID_5SITE;
+  const liveAnnualPrice = process.env.STRIPE_PRICE_ID_ANNUAL;
+  const liveUnlimitedPrice = process.env.STRIPE_PRICE_ID_UNLIMITED;
+  
   // Test Mode Price Configurations
   const testPriceConfigs = {
-    'price_1RkFGwBnsFQAR5m9Mqu8gTJQ': {  // Test 5 Sites
+    [test5SitePrice]: {  // Test 5 Sites
       type: 'professional_monthly',
       prefix: 'PRO',
       siteLimit: 5
     },
-    'price_1RkFIiBnsFQAR5m9qNGDmIxN': {  // Test Unlimited One Time
+    [testUnlimitedPrice]: {  // Test Unlimited One Time
       type: 'lifetime_unlimited',
       prefix: 'LIFE',
       siteLimit: -1
     },
-    'price_1RmEsBBnsFQAR5m9CcwlIovq': {  // Test Unlimited Annual
+    [testAnnualPrice]: {  // Test Unlimited Annual
       type: 'annual_unlimited',
       prefix: 'ANN',
       siteLimit: -1
@@ -360,17 +369,17 @@ function getLicenseConfig(priceId, productId) {
   
   // Live Mode Price Configurations
   const livePriceConfigs = {
-    'price_1RkGCpBnsFQAR5m9DrXgUzoU': {  // Live 5 Sites
+    [live5SitePrice]: {  // Live 5 Sites
       type: 'professional_monthly',
       prefix: 'PRO',
       siteLimit: 5
     },
-    'price_1RkGEXBnsFQAR5m9tYO2qQ6v': {  // Live Unlimited One Time
+    [liveUnlimitedPrice]: {  // Live Unlimited One Time
       type: 'lifetime_unlimited',
       prefix: 'LIFE',
       siteLimit: -1
     },
-    'price_1RmEjHBnsFQAR5m9D9zBFmJf': {  // Live Unlimited Annual
+    [liveAnnualPrice]: {  // Live Unlimited Annual
       type: 'annual_unlimited',
       prefix: 'ANN',
       siteLimit: -1
@@ -386,10 +395,7 @@ function getLicenseConfig(priceId, productId) {
   }
   
   // Fallback: try to determine by product ID patterns
-  const testProductId = 'prod_SfaR1u7bpArX27';
-  const liveProductId = 'prod_SfbPwCuGnXEpWi';
-  
-  if (productId === testProductId || productId === liveProductId) {
+  if (productId && (productId.includes('prod_') || productId.includes('test') || productId.includes('live'))) {
     console.log(`⚠️ Fallback product ID match for ${isTestMode ? 'TEST' : 'LIVE'} mode:`, productId);
     // Default to professional if we can't determine specific price
     return {
