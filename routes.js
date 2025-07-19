@@ -4,14 +4,22 @@ const db = require('./db');
 const mailer = require('./mailer');
 const crypto = require('crypto');
 
-// Stripe integration
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// Stripe integration with test/live mode support
+const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+const stripeSecretKey = isTestMode ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
+const webhookSecret = isTestMode ? process.env.STRIPE_TEST_WEBHOOK_SECRET : process.env.STRIPE_WEBHOOK_SECRET;
+
+const stripe = require('stripe')(stripeSecretKey);
+
+console.log(`🔧 Stripe initialized in ${isTestMode ? 'TEST' : 'LIVE'} mode`);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
+  const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
   res.json({ 
     status: 'ok', 
     service: 'SiteOverlay Pro API by eBiz360',
+    stripe_mode: isTestMode ? 'TEST' : 'LIVE',
     timestamp: new Date().toISOString()
   });
 });
@@ -22,7 +30,7 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     console.log('✅ Stripe webhook verified:', event.type);
   } catch (err) {
     console.error('❌ Stripe webhook signature verification failed:', err.message);
@@ -329,21 +337,38 @@ async function handlePaymentFailed(invoice) {
 
 // Get license configuration based on Stripe price/product ID
 function getLicenseConfig(priceId, productId) {
-  // Configure your Stripe price IDs here
-  const priceConfigs = {
-    // $35/month Professional (5 sites)
+  const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+  
+  // Configure your Stripe price IDs here - different for test vs live
+  const priceConfigs = isTestMode ? {
+    // TEST MODE: Test price IDs
+    'price_test_professional_monthly': {
+      type: 'professional',
+      prefix: 'PRO',
+      siteLimit: 5
+    },
+    'price_test_lifetime_unlimited': {
+      type: 'lifetime_unlimited',
+      prefix: 'LIFE',
+      siteLimit: -1
+    },
+    'price_test_annual_unlimited': {
+      type: 'annual_unlimited',
+      prefix: 'ANN',
+      siteLimit: -1
+    }
+  } : {
+    // LIVE MODE: Production price IDs
     'price_professional_monthly': {
       type: 'professional',
       prefix: 'PRO',
       siteLimit: 5
     },
-    // $297 Lifetime Unlimited
     'price_lifetime_unlimited': {
       type: 'lifetime_unlimited',
       prefix: 'LIFE',
       siteLimit: -1
     },
-    // $197/year Annual Unlimited (NEW PRODUCT)
     'price_annual_unlimited': {
       type: 'annual_unlimited',
       prefix: 'ANN',
@@ -358,11 +383,11 @@ function getLicenseConfig(priceId, productId) {
   
   // Fallback: try to determine by product ID patterns
   if (productId.includes('professional') || productId.includes('5site')) {
-    return priceConfigs['price_professional_monthly'];
+    return isTestMode ? priceConfigs['price_test_professional_monthly'] : priceConfigs['price_professional_monthly'];
   } else if (productId.includes('lifetime') || productId.includes('297')) {
-    return priceConfigs['price_lifetime_unlimited'];
+    return isTestMode ? priceConfigs['price_test_lifetime_unlimited'] : priceConfigs['price_lifetime_unlimited'];
   } else if (productId.includes('annual') || productId.includes('197')) {
-    return priceConfigs['price_annual_unlimited'];
+    return isTestMode ? priceConfigs['price_test_annual_unlimited'] : priceConfigs['price_annual_unlimited'];
   }
   
   console.error('❌ No license config found for:', { priceId, productId });
