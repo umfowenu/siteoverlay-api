@@ -14,10 +14,23 @@ const webhookSecret = isTestMode ?
   process.env.STRIPE_TEST_WEBHOOK_SECRET : 
   process.env.STRIPE_LIVE_WEBHOOK_SECRET;
 
-const stripe = require('stripe')(stripeSecretKey);
+// Validate Stripe configuration
+if (!stripeSecretKey) {
+  console.error('❌ CRITICAL: Stripe secret key not configured!');
+  console.error(`Mode: ${isTestMode ? 'TEST' : 'LIVE'}`);
+  console.error('Please set the appropriate environment variables in Railway');
+  process.exit(1);
+}
 
-console.log(`🔧 Stripe initialized in ${isTestMode ? 'TEST' : 'LIVE'} mode`);
-console.log(`📧 Using webhook secret: ${webhookSecret ? webhookSecret.substring(0, 12) + '...' : 'NOT CONFIGURED'}`);
+let stripe;
+try {
+  stripe = require('stripe')(stripeSecretKey);
+  console.log(`🔧 Stripe initialized in ${isTestMode ? 'TEST' : 'LIVE'} mode`);
+  console.log(`📧 Using webhook secret: ${webhookSecret ? webhookSecret.substring(0, 12) + '...' : 'NOT CONFIGURED'}`);
+} catch (error) {
+  console.error('❌ CRITICAL: Failed to initialize Stripe:', error.message);
+  process.exit(1);
+}
 
 // Health check endpoint
 router.get('/health', (req, res) => {
@@ -35,6 +48,12 @@ router.get('/health', (req, res) => {
 router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
+
+  // Check if webhook secret is configured
+  if (!webhookSecret) {
+    console.error('❌ Webhook secret not configured');
+    return res.status(500).json({error: 'Webhook not configured'});
+  }
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
