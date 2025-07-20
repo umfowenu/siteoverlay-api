@@ -20,7 +20,8 @@ router.get('/health', (req, res) => {
     status: 'ok', 
     service: 'SiteOverlay Pro API by eBiz360',
     stripe_mode: isTestMode ? 'TEST' : 'LIVE',
-    pabbly_webhook_configured: !!process.env.PABBLY_WEBHOOK_URL,
+    pabbly_trial_webhook_configured: !!process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY,
+    pabbly_buyers_webhook_configured: !!process.env.PABBLY_WEBHOOK_URL_BUYERS_SITEOVERLAY,
     timestamp: new Date().toISOString()
   });
 });
@@ -1652,9 +1653,17 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
 
     console.log('Sending to Pabbly Connect (Trial):', { email, licenseKey, licenseType });
 
+    // Determine webhook URL based on product and license type
+    let webhookUrl;
+    if (licenseType === 'trial') {
+      webhookUrl = process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY;
+    } else {
+      webhookUrl = process.env.PABBLY_WEBHOOK_URL_BUYERS_SITEOVERLAY;
+    }
+
     // Send to Pabbly Connect webhook
-    if (process.env.PABBLY_WEBHOOK_URL) {
-      const response = await fetch(process.env.PABBLY_WEBHOOK_URL, {
+    if (webhookUrl) {
+      const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1684,12 +1693,12 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
 // Test Pabbly webhook configuration
 router.get('/test-pabbly', async (req, res) => {
   try {
-    const webhookUrl = process.env.PABBLY_WEBHOOK_URL;
+    const webhookUrl = process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY;
     
     if (!webhookUrl) {
       return res.json({
         success: false,
-        message: 'PABBLY_WEBHOOK_URL environment variable is not set',
+        message: 'PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY environment variable is not set',
         webhook_url: null,
         environment_check: {
           pabbly_webhook_url_exists: false,
@@ -1763,13 +1772,13 @@ router.get('/test-pabbly', async (req, res) => {
     res.json({
       success: false,
       message: 'Pabbly webhook test error: ' + error.message,
-      webhook_url: process.env.PABBLY_WEBHOOK_URL || 'NOT_SET',
-      environment_check: {
-        pabbly_webhook_url_exists: !!process.env.PABBLY_WEBHOOK_URL,
-        pabbly_webhook_url_length: process.env.PABBLY_WEBHOOK_URL?.length || 0,
-        pabbly_webhook_url_starts_with_https: process.env.PABBLY_WEBHOOK_URL?.startsWith('https://') || false,
-        webhook_url_format: process.env.PABBLY_WEBHOOK_URL?.includes('pabbly.com') ? 'valid' : 'suspicious'
-      }
+              webhook_url: process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY || 'NOT_SET',
+        environment_check: {
+          pabbly_webhook_url_exists: !!process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY,
+          pabbly_webhook_url_length: process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY?.length || 0,
+          pabbly_webhook_url_starts_with_https: process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY?.startsWith('https://') || false,
+          webhook_url_format: process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY?.includes('pabbly.com') ? 'valid' : 'suspicious'
+        }
     });
   }
 });
@@ -1777,7 +1786,7 @@ router.get('/test-pabbly', async (req, res) => {
 // Diagnostic endpoint for Pabbly integration
 router.get('/diagnose-pabbly', async (req, res) => {
   try {
-    const webhookUrl = process.env.PABBLY_WEBHOOK_URL;
+    const webhookUrl = process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY;
     
     // Test sendToPabbly function directly
     console.log('🔍 Testing sendToPabbly function...');
@@ -1799,7 +1808,7 @@ router.get('/diagnose-pabbly', async (req, res) => {
         current_webhook_url: webhookUrl || 'NOT_SET'
       },
       recommendations: [
-        webhookUrl ? '✅ Environment variable is set' : '❌ Set PABBLY_WEBHOOK_URL environment variable',
+        webhookUrl ? '✅ Environment variable is set' : '❌ Set PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY environment variable',
         webhookUrl?.includes('pabbly.com') ? '✅ URL format looks correct' : '❌ Check webhook URL format',
         testResult ? '✅ sendToPabbly function working' : '❌ sendToPabbly function failing',
         webhookUrl === 'https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjYwNTZhMDYzNDA0MzU1MjZlNTUzNTUxMzYi_pc' ? '✅ Webhook URL matches expected' : '❌ Webhook URL does not match expected'
@@ -1812,8 +1821,8 @@ router.get('/diagnose-pabbly', async (req, res) => {
       success: false,
       message: 'Pabbly diagnosis failed: ' + error.message,
       diagnosis: {
-        environment_variable_set: !!process.env.PABBLY_WEBHOOK_URL,
-        webhook_url: process.env.PABBLY_WEBHOOK_URL || 'NOT_SET',
+        environment_variable_set: !!process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY,
+        webhook_url: process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY || 'NOT_SET',
         error: error.message
       }
     });
