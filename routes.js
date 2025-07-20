@@ -1625,34 +1625,31 @@ router.get('/admin/licenses', async (req, res) => {
 // Pabbly Connect integration function
 async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
   try {
-    // Prepare data for Pabbly Connect webhook
+    // Enhanced trial data for AWeber mapping
     const pabblyData = {
-      // Core data
+      // Core subscriber data (REAL DATA - NOT GENERIC)
       email: email,
+      customer_name: metadata.customer_name || 'Customer',
+      
+      // AWeber custom fields (matching your setup)
       license_key: licenseKey,
-      license_type: licenseType,
-      
-      // Customer context
-      customer_name: metadata.customer_name || '',
-      website_url: metadata.website_url || '',
-      site_url: metadata.site_url || '',
-      
-      // Timing data
-      signup_date: new Date().toISOString(),
+      site_url: metadata.site_url || metadata.website_url || '',
       trial_expires: metadata.trial_expires || '',
       
-      // AWeber mapping fields (Pabbly will handle these)
-      aweber_list: 'siteoverlay-pro',
-      aweber_tags: [licenseType, 'siteoverlay-pro', 'wordpress-plugin'].join(','),
+      // AWeber tagging
+      aweber_tags: 'trial',
       
-      // Email template variables
+      // Additional context for Pabbly
+      license_type: licenseType,
       product_name: 'SiteOverlay Pro',
       trial_duration: '14 days',
-      support_email: 'support@siteoverlaypro.com',
-      login_instructions: 'Go to WordPress Admin → Settings → SiteOverlay License'
+      signup_date: new Date().toISOString(),
+      
+      // Support information
+      support_email: 'support@siteoverlaypro.com'
     };
 
-    console.log('Sending to Pabbly Connect:', { email, licenseKey, licenseType });
+    console.log('Sending to Pabbly Connect (Trial):', { email, licenseKey, licenseType });
 
     // Send to Pabbly Connect webhook
     if (process.env.PABBLY_WEBHOOK_URL) {
