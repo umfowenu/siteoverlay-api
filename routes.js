@@ -1192,12 +1192,16 @@ router.post('/request-trial', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Trial license created successfully! Your 14-day trial license has been sent to ${email}.`,
+      message: 'Details submitted. Check your inbox for the license key to activate trial',
       data: {
+        license_key: trialLicenseKey,
         email: email,
         customer_name: full_name,
+        license_type: 'trial',
         expires: trialExpires.toISOString(),
-        pabbly_status: pabblySuccess ? 'email_sent' : 'email_pending'
+        site_limit: 5,
+        pabbly_status: pabblySuccess ? 'email_sent' : 'email_pending',
+        instructions: 'Your 14-day trial license has been sent to your email. You can also copy the license key above and paste it into your WordPress plugin settings.'
       }
     });
 
