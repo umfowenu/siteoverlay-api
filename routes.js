@@ -43,6 +43,9 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
       case 'checkout.session.completed':
         await handleCheckoutCompleted(event.data.object);
         break;
+      case 'customer.subscription.created':
+        await handleSubscriptionCreated(event.data.object);
+        break;
       case 'payment_intent.succeeded':
         await handlePaymentSucceeded(event.data.object);
         break;
@@ -57,6 +60,9 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
         break;
       case 'invoice.payment_failed':
         await handlePaymentFailed(event.data.object);
+        break;
+      case 'charge.dispute.created':
+        await handleRefundOrDispute(event.data.object);
         break;
       default:
         console.log(`Unhandled event type ${event.type}`);
@@ -299,6 +305,30 @@ async function handleSubscriptionUpdated(subscription) {
   }
 }
 
+// Handle subscription created (backup handler)
+async function handleSubscriptionCreated(subscription) {
+  console.log('🆕 Subscription created:', subscription.id);
+  
+  try {
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    const priceId = subscription.items.data[0]?.price?.id;
+    const productId = subscription.items.data[0]?.price?.product?.id;
+    
+    console.log('📦 New subscription details:', { 
+      customer: customer.email, 
+      priceId, 
+      productId 
+    });
+    
+    // This is a backup handler - main processing happens in checkout.session.completed
+    // But we can add additional logic here if needed
+    
+  } catch (error) {
+    console.error('❌ Subscription created processing error:', error);
+    throw error;
+  }
+}
+
 // Handle payment failures
 async function handlePaymentFailed(invoice) {
   console.log('💳 Payment failed:', invoice.id);
@@ -320,17 +350,73 @@ async function handlePaymentFailed(invoice) {
     
     console.log('📦 Payment failed for license type:', licenseConfig.type);
     
-    // Optionally suspend the license temporarily
-    // You might want to implement a grace period before fully deactivating
+    // Suspend license (don't delete immediately)
     await db.query(
       'UPDATE licenses SET status = $1 WHERE customer_email = $2 AND license_type = $3',
-      ['payment_failed', customer.email, licenseConfig.type]
+      ['suspended', customer.email, licenseConfig.type]
     );
     
     console.log('⚠️ License suspended due to payment failure:', customer.email, 'license type:', licenseConfig.type);
     
+    // Send payment failure email via Pabbly
+    const pabblySuccess = await sendToPabbly(customer.email, null, 'payment_failed', {
+      customer_name: customer.name || 'Customer',
+      subscription_id: subscription.id,
+      invoice_id: invoice.id
+    });
+    
+    console.log('📧 Payment failure email sent via Pabbly:', pabblySuccess);
+    
   } catch (error) {
     console.error('❌ Payment failure processing error:', error);
+    throw error;
+  }
+}
+
+// Handle refunds and disputes
+async function handleRefundOrDispute(object) {
+  console.log('🔄 Refund/dispute detected:', object.id);
+  
+  try {
+    let subscriptionId;
+    let customerId;
+    
+    if (object.subscription) {
+      subscriptionId = object.subscription;
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      customerId = subscription.customer;
+    } else if (object.charge) {
+      // Get subscription from charge
+      const charge = await stripe.charges.retrieve(object.charge);
+      const invoice = await stripe.invoices.retrieve(charge.invoice);
+      subscriptionId = invoice.subscription;
+      customerId = charge.customer;
+    }
+    
+    if (subscriptionId && customerId) {
+      const customer = await stripe.customers.retrieve(customerId);
+      
+      // Deactivate license immediately
+      await db.query(
+        'UPDATE licenses SET status = $1 WHERE customer_email = $2',
+        ['deactivated', customer.email]
+      );
+      
+      console.log('🚫 License deactivated for refund/dispute:', customer.email);
+      
+      // Send refund notification email via Pabbly
+      const pabblySuccess = await sendToPabbly(customer.email, null, 'refund_dispute', {
+        customer_name: customer.name || 'Customer',
+        subscription_id: subscriptionId,
+        dispute_id: object.id,
+        reason: object.reason || 'refund'
+      });
+      
+      console.log('📧 Refund notification email sent via Pabbly:', pabblySuccess);
+    }
+    
+  } catch (error) {
+    console.error('❌ Refund/dispute processing error:', error);
     throw error;
   }
 }
