@@ -1690,7 +1690,12 @@ router.get('/test-pabbly', async (req, res) => {
       return res.json({
         success: false,
         message: 'PABBLY_WEBHOOK_URL environment variable is not set',
-        webhook_url: null
+        webhook_url: null,
+        environment_check: {
+          pabbly_webhook_url_exists: false,
+          pabbly_webhook_url_length: 0,
+          pabbly_webhook_url_starts_with_https: false
+        }
       });
     }
 
@@ -1727,7 +1732,13 @@ router.get('/test-pabbly', async (req, res) => {
         message: 'Pabbly webhook test successful',
         webhook_url: webhookUrl,
         test_data: testData,
-        response_status: response.status
+        response_status: response.status,
+        environment_check: {
+          pabbly_webhook_url_exists: true,
+          pabbly_webhook_url_length: webhookUrl.length,
+          pabbly_webhook_url_starts_with_https: webhookUrl.startsWith('https://'),
+          webhook_url_format: webhookUrl.includes('pabbly.com') ? 'valid' : 'suspicious'
+        }
       });
     } else {
       const errorText = await response.text();
@@ -1737,7 +1748,13 @@ router.get('/test-pabbly', async (req, res) => {
         message: 'Pabbly webhook test failed',
         webhook_url: webhookUrl,
         response_status: response.status,
-        error: errorText
+        error: errorText,
+        environment_check: {
+          pabbly_webhook_url_exists: true,
+          pabbly_webhook_url_length: webhookUrl.length,
+          pabbly_webhook_url_starts_with_https: webhookUrl.startsWith('https://'),
+          webhook_url_format: webhookUrl.includes('pabbly.com') ? 'valid' : 'suspicious'
+        }
       });
     }
 
@@ -1746,7 +1763,59 @@ router.get('/test-pabbly', async (req, res) => {
     res.json({
       success: false,
       message: 'Pabbly webhook test error: ' + error.message,
-      webhook_url: process.env.PABBLY_WEBHOOK_URL || 'NOT_SET'
+      webhook_url: process.env.PABBLY_WEBHOOK_URL || 'NOT_SET',
+      environment_check: {
+        pabbly_webhook_url_exists: !!process.env.PABBLY_WEBHOOK_URL,
+        pabbly_webhook_url_length: process.env.PABBLY_WEBHOOK_URL?.length || 0,
+        pabbly_webhook_url_starts_with_https: process.env.PABBLY_WEBHOOK_URL?.startsWith('https://') || false,
+        webhook_url_format: process.env.PABBLY_WEBHOOK_URL?.includes('pabbly.com') ? 'valid' : 'suspicious'
+      }
+    });
+  }
+});
+
+// Diagnostic endpoint for Pabbly integration
+router.get('/diagnose-pabbly', async (req, res) => {
+  try {
+    const webhookUrl = process.env.PABBLY_WEBHOOK_URL;
+    
+    // Test sendToPabbly function directly
+    console.log('🔍 Testing sendToPabbly function...');
+    const testResult = await sendToPabbly('test@example.com', 'TEST-XXXX-XXXX-XXXX', 'trial', {
+      customer_name: 'Test User',
+      website_url: 'https://test.com',
+      site_url: 'https://test.com',
+      trial_expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+    });
+    
+    res.json({
+      success: true,
+      diagnosis: {
+        environment_variable_set: !!webhookUrl,
+        webhook_url_length: webhookUrl?.length || 0,
+        webhook_url_format: webhookUrl?.includes('pabbly.com') ? 'valid' : 'invalid',
+        sendToPabbly_function_working: testResult,
+        expected_webhook_url: 'https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjYwNTZhMDYzNDA0MzU1MjZlNTUzNTUxMzYi_pc',
+        current_webhook_url: webhookUrl || 'NOT_SET'
+      },
+      recommendations: [
+        webhookUrl ? '✅ Environment variable is set' : '❌ Set PABBLY_WEBHOOK_URL environment variable',
+        webhookUrl?.includes('pabbly.com') ? '✅ URL format looks correct' : '❌ Check webhook URL format',
+        testResult ? '✅ sendToPabbly function working' : '❌ sendToPabbly function failing',
+        webhookUrl === 'https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjYwNTZhMDYzNDA0MzU1MjZlNTUzNTUxMzYi_pc' ? '✅ Webhook URL matches expected' : '❌ Webhook URL does not match expected'
+      ]
+    });
+
+  } catch (error) {
+    console.error('❌ Pabbly diagnosis error:', error);
+    res.json({
+      success: false,
+      message: 'Pabbly diagnosis failed: ' + error.message,
+      diagnosis: {
+        environment_variable_set: !!process.env.PABBLY_WEBHOOK_URL,
+        webhook_url: process.env.PABBLY_WEBHOOK_URL || 'NOT_SET',
+        error: error.message
+      }
     });
   }
 });
