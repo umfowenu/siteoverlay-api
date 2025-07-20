@@ -713,14 +713,15 @@ router.post('/start-trial', async (req, res) => {
 
     res.json({
       success: true,
-      message: '14-day trial started successfully',
+      message: 'Details submitted. Check your inbox for the license key to activate trial',
       data: {
         license_key: trialLicenseKey,
         license_type: 'trial',
         status: 'trial',
         site_limit: 5,
         expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        company: 'eBiz360'
+        company: 'eBiz360',
+        instructions: 'Your 14-day trial license has been sent to your email. Copy the license key and paste it into your WordPress plugin settings.'
       }
     });
 
