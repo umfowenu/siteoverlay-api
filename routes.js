@@ -20,6 +20,7 @@ router.get('/health', (req, res) => {
     status: 'ok', 
     service: 'SiteOverlay Pro API by eBiz360',
     stripe_mode: isTestMode ? 'TEST' : 'LIVE',
+    pabbly_webhook_configured: !!process.env.PABBLY_WEBHOOK_URL,
     timestamp: new Date().toISOString()
   });
 });
@@ -1679,6 +1680,76 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
     return false;
   }
 }
+
+// Test Pabbly webhook configuration
+router.get('/test-pabbly', async (req, res) => {
+  try {
+    const webhookUrl = process.env.PABBLY_WEBHOOK_URL;
+    
+    if (!webhookUrl) {
+      return res.json({
+        success: false,
+        message: 'PABBLY_WEBHOOK_URL environment variable is not set',
+        webhook_url: null
+      });
+    }
+
+    // Test the webhook with sample data
+    const testData = {
+      email: "marius@shaw.ca",
+      customer_name: "Marius Nothling",
+      license_key: "TRIAL-TEST-XXXX-XXXX",
+      site_url: "https://ebiz360.ca",
+      trial_expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      aweber_tags: "trial",
+      license_type: "trial",
+      product_name: "SiteOverlay Pro",
+      trial_duration: "14 days",
+      signup_date: new Date().toISOString(),
+      support_email: "support@siteoverlaypro.com"
+    };
+
+    console.log('🧪 Testing Pabbly webhook with URL:', webhookUrl);
+    console.log('📤 Sending test data:', testData);
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(testData)
+    });
+
+    if (response.ok) {
+      console.log('✅ Pabbly webhook test successful');
+      res.json({
+        success: true,
+        message: 'Pabbly webhook test successful',
+        webhook_url: webhookUrl,
+        test_data: testData,
+        response_status: response.status
+      });
+    } else {
+      const errorText = await response.text();
+      console.error('❌ Pabbly webhook test failed:', response.status, errorText);
+      res.json({
+        success: false,
+        message: 'Pabbly webhook test failed',
+        webhook_url: webhookUrl,
+        response_status: response.status,
+        error: errorText
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Pabbly webhook test error:', error);
+    res.json({
+      success: false,
+      message: 'Pabbly webhook test error: ' + error.message,
+      webhook_url: process.env.PABBLY_WEBHOOK_URL || 'NOT_SET'
+    });
+  }
+});
 
 // Fix database structure - add missing created_at column
 router.get('/fix-database', async (req, res) => {
