@@ -24,14 +24,34 @@ router.get('/health', (req, res) => {
   });
 });
 
-// NEW: Stripe webhook endpoint for payment processing
+// Enhanced Stripe webhook endpoint with test/live mode detection
 router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
+  let isTestMode = false;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    console.log('✅ Stripe webhook verified:', event.type);
+    // Try test secret first
+    const testSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST;
+    if (testSecret) {
+      try {
+        event = stripe.webhooks.constructEvent(req.body, sig, testSecret);
+        isTestMode = true;
+        console.log('✅ Test webhook verified:', event.type);
+      } catch (testError) {
+        // Try live secret
+        const liveSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET;
+        event = stripe.webhooks.constructEvent(req.body, sig, liveSecret);
+        isTestMode = false;
+        console.log('✅ Live webhook verified:', event.type);
+      }
+    } else {
+      // Fallback to single secret (legacy method)
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET_LIVE;
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+      console.log(`✅ Webhook verified (${isTestMode ? 'TEST' : 'LIVE'} mode):`, event.type);
+    }
   } catch (err) {
     console.error('❌ Stripe webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -41,28 +61,28 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
     // Handle the event
     switch (event.type) {
       case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object);
+        await handleCheckoutCompleted(event.data.object, isTestMode);
         break;
       case 'customer.subscription.created':
-        await handleSubscriptionCreated(event.data.object);
+        await handleSubscriptionCreated(event.data.object, isTestMode);
         break;
       case 'payment_intent.succeeded':
-        await handlePaymentSucceeded(event.data.object);
+        await handlePaymentSucceeded(event.data.object, isTestMode);
         break;
       case 'invoice.payment_succeeded':
-        await handleSubscriptionPayment(event.data.object);
+        await handleSubscriptionPayment(event.data.object, isTestMode);
         break;
       case 'customer.subscription.deleted':
-        await handleSubscriptionCancelled(event.data.object);
+        await handleSubscriptionCancelled(event.data.object, isTestMode);
         break;
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object);
+        await handleSubscriptionUpdated(event.data.object, isTestMode);
         break;
       case 'invoice.payment_failed':
-        await handlePaymentFailed(event.data.object);
+        await handlePaymentFailed(event.data.object, isTestMode);
         break;
       case 'charge.dispute.created':
-        await handleRefundOrDispute(event.data.object);
+        await handleRefundOrDispute(event.data.object, isTestMode);
         break;
       default:
         console.log(`Unhandled event type ${event.type}`);
@@ -75,93 +95,142 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
   }
 });
 
-// Handle successful checkout completion
-async function handleCheckoutCompleted(session) {
-  console.log('🛒 Processing checkout completion:', session.id);
+// Enhanced checkout completion handler with payment links support
+async function handleCheckoutCompleted(session, isTestMode = false) {
+  console.log(`🛒 Processing checkout completion (${isTestMode ? 'TEST' : 'LIVE'}):`, session.id);
   
   try {
-    // Get line items to determine product
-    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
-      expand: ['data.price.product']
-    });
+    // Get customer details from Stripe
+    const customer = await stripe.customers.retrieve(session.customer);
     
-    if (!lineItems.data.length) {
-      console.error('❌ No line items found for session:', session.id);
-      return;
+    // Handle subscription-based purchases
+    if (session.subscription) {
+      const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      
+      // Extract customer info
+      const customerData = {
+        email: customer.email,
+        name: customer.name || session.customer_details?.name || 'Customer',
+        stripeCustomerId: customer.id,
+        subscriptionId: session.subscription,
+        priceId: subscription.items.data[0].price.id,
+        planType: getPlanTypeFromPriceId(subscription.items.data[0].price.id),
+        status: 'active',
+        isTestMode: isTestMode,
+        environment: isTestMode ? 'test' : 'live',
+        createdAt: new Date()
+      };
+      
+      // Generate license key
+      const licenseKey = generateLicenseKey();
+      
+      // Prepare license data
+      const licenseData = {
+        ...customerData,
+        licenseKey,
+        maxSites: getMaxSitesFromPriceId(customerData.priceId)
+      };
+      
+      // Save to database
+      await saveLicenseToDatabase(licenseData);
+      
+      // Send welcome email (only in live mode)
+      if (!isTestMode) {
+        await sendWelcomeEmail(customerData.email, customerData.name, licenseKey);
+      } else {
+        console.log('🧪 Test mode - would send welcome email to:', customerData.email);
+      }
+      
+      console.log('✅ License created for payment link purchase:', customerData.email);
+      
+    } else {
+      // Handle one-time payments (existing logic)
+      const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+        expand: ['data.price.product']
+      });
+      
+      if (!lineItems.data.length) {
+        console.error('❌ No line items found for session:', session.id);
+        return;
+      }
+      
+      const priceId = lineItems.data[0].price.id;
+      const productId = lineItems.data[0].price.product.id;
+      const customerEmail = session.customer_details?.email;
+      const customerName = session.customer_details?.name || 'Customer';
+      
+      console.log('📦 Product details:', { priceId, productId, customerEmail });
+      
+      // Determine license type based on price ID or product ID
+      const licenseConfig = getLicenseConfig(priceId, productId);
+      if (!licenseConfig) {
+        console.error('❌ Unknown product/price ID:', { priceId, productId });
+        return;
+      }
+      
+      // Generate license key
+      const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
+      console.log('🔑 Generated license:', licenseKey);
+      
+      // Calculate expiration date
+      let expirationDate = null;
+      if (licenseConfig.type === 'annual_unlimited') {
+        expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+      }
+      
+      // Create license in database
+      await db.query(`
+        INSERT INTO licenses (
+          license_key, license_type, status, customer_email, customer_name,
+          purchase_source, trial_expires, site_limit, kill_switch_enabled, 
+          resale_monitoring, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+      `, [
+        licenseKey,
+        licenseConfig.type,
+        'active',
+        customerEmail,
+        customerName,
+        'stripe_checkout',
+        expirationDate,
+        licenseConfig.siteLimit,
+        true,
+        true
+      ]);
+      
+      console.log('✅ License created in database');
+      
+      // Send license email via Pabbly (only in live mode)
+      if (!isTestMode) {
+        const pabblySuccess = await sendToPabbly(customerEmail, licenseKey, licenseConfig.type, {
+          customer_name: customerName,
+          purchase_amount: session.amount_total / 100,
+          currency: session.currency,
+          stripe_session_id: session.id
+        });
+        
+        console.log('📧 License email sent via Pabbly:', pabblySuccess);
+        
+        // Store email collection record
+        await db.query(`
+          INSERT INTO email_collection (
+            email, license_key, collection_source, license_type,
+            customer_name, sent_to_autoresponder, collected_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [
+          customerEmail,
+          licenseKey,
+          'stripe_purchase',
+          licenseConfig.type,
+          customerName,
+          pabblySuccess
+        ]);
+      } else {
+        console.log('🧪 Test mode - would send email to:', customerEmail);
+      }
+      
+      console.log('✅ Checkout processing completed for:', customerEmail);
     }
-    
-    const priceId = lineItems.data[0].price.id;
-    const productId = lineItems.data[0].price.product.id;
-    const customerEmail = session.customer_details?.email;
-    const customerName = session.customer_details?.name || 'Customer';
-    
-    console.log('📦 Product details:', { priceId, productId, customerEmail });
-    
-    // Determine license type based on price ID or product ID
-    const licenseConfig = getLicenseConfig(priceId, productId);
-    if (!licenseConfig) {
-      console.error('❌ Unknown product/price ID:', { priceId, productId });
-      return;
-    }
-    
-    // Generate license key
-    const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
-    console.log('🔑 Generated license:', licenseKey);
-    
-    // Calculate expiration date
-    let expirationDate = null;
-    if (licenseConfig.type === 'annual_unlimited') {
-      expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
-    }
-    
-    // Create license in database
-    await db.query(`
-      INSERT INTO licenses (
-        license_key, license_type, status, customer_email, customer_name,
-        purchase_source, trial_expires, site_limit, kill_switch_enabled, 
-        resale_monitoring, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-    `, [
-      licenseKey,
-      licenseConfig.type,
-      'active',
-      customerEmail,
-      customerName,
-      'stripe_checkout',
-      expirationDate,
-      licenseConfig.siteLimit,
-      true,
-      true
-    ]);
-    
-    console.log('✅ License created in database');
-    
-    // Send license email via Pabbly
-    const pabblySuccess = await sendToPabbly(customerEmail, licenseKey, licenseConfig.type, {
-      customer_name: customerName,
-      purchase_amount: session.amount_total / 100,
-      currency: session.currency,
-      stripe_session_id: session.id
-    });
-    
-    console.log('📧 License email sent via Pabbly:', pabblySuccess);
-    
-    // Store email collection record
-    await db.query(`
-      INSERT INTO email_collection (
-        email, license_key, collection_source, license_type,
-        customer_name, sent_to_autoresponder, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-    `, [
-      customerEmail,
-      licenseKey,
-      'stripe_purchase',
-      licenseConfig.type,
-      customerName,
-      pabblySuccess
-    ]);
-    
-    console.log('✅ Checkout processing completed for:', customerEmail);
     
   } catch (error) {
     console.error('❌ Checkout processing error:', error);
@@ -170,14 +239,14 @@ async function handleCheckoutCompleted(session) {
 }
 
 // Handle payment succeeded (for one-time payments)
-async function handlePaymentSucceeded(paymentIntent) {
-  console.log('💳 Payment succeeded:', paymentIntent.id);
+async function handlePaymentSucceeded(paymentIntent, isTestMode = false) {
+  console.log(`💳 Payment succeeded (${isTestMode ? 'TEST' : 'LIVE'}):`, paymentIntent.id);
   // Additional processing if needed
 }
 
 // Handle subscription payment (for monthly and annual subscriptions)
-async function handleSubscriptionPayment(invoice) {
-  console.log('🔄 Subscription payment:', invoice.id);
+async function handleSubscriptionPayment(invoice, isTestMode = false) {
+  console.log(`🔄 Subscription payment (${isTestMode ? 'TEST' : 'LIVE'}):`, invoice.id);
   
   try {
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
@@ -229,8 +298,8 @@ async function handleSubscriptionPayment(invoice) {
 }
 
 // Handle subscription cancellation
-async function handleSubscriptionCancelled(subscription) {
-  console.log('❌ Subscription cancelled:', subscription.id);
+async function handleSubscriptionCancelled(subscription, isTestMode = false) {
+  console.log(`❌ Subscription cancelled (${isTestMode ? 'TEST' : 'LIVE'}):`, subscription.id);
   
   try {
     const customer = await stripe.customers.retrieve(subscription.customer);
@@ -263,8 +332,8 @@ async function handleSubscriptionCancelled(subscription) {
 }
 
 // Handle subscription updates (e.g., plan changes, billing cycle changes)
-async function handleSubscriptionUpdated(subscription) {
-  console.log('🔄 Subscription updated:', subscription.id);
+async function handleSubscriptionUpdated(subscription, isTestMode = false) {
+  console.log(`🔄 Subscription updated (${isTestMode ? 'TEST' : 'LIVE'}):`, subscription.id);
   
   try {
     const customer = await stripe.customers.retrieve(subscription.customer);
@@ -306,8 +375,8 @@ async function handleSubscriptionUpdated(subscription) {
 }
 
 // Handle subscription created (backup handler)
-async function handleSubscriptionCreated(subscription) {
-  console.log('🆕 Subscription created:', subscription.id);
+async function handleSubscriptionCreated(subscription, isTestMode = false) {
+  console.log(`🆕 Subscription created (${isTestMode ? 'TEST' : 'LIVE'}):`, subscription.id);
   
   try {
     const customer = await stripe.customers.retrieve(subscription.customer);
@@ -330,8 +399,8 @@ async function handleSubscriptionCreated(subscription) {
 }
 
 // Handle payment failures
-async function handlePaymentFailed(invoice) {
-  console.log('💳 Payment failed:', invoice.id);
+async function handlePaymentFailed(invoice, isTestMode = false) {
+  console.log(`💳 Payment failed (${isTestMode ? 'TEST' : 'LIVE'}):`, invoice.id);
   
   try {
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
@@ -358,14 +427,18 @@ async function handlePaymentFailed(invoice) {
     
     console.log('⚠️ License suspended due to payment failure:', customer.email, 'license type:', licenseConfig.type);
     
-    // Send payment failure email via Pabbly
-    const pabblySuccess = await sendToPabbly(customer.email, null, 'payment_failed', {
-      customer_name: customer.name || 'Customer',
-      subscription_id: subscription.id,
-      invoice_id: invoice.id
-    });
-    
-    console.log('📧 Payment failure email sent via Pabbly:', pabblySuccess);
+    // Send payment failure email via Pabbly (only in live mode)
+    if (!isTestMode) {
+      const pabblySuccess = await sendToPabbly(customer.email, null, 'payment_failed', {
+        customer_name: customer.name || 'Customer',
+        subscription_id: subscription.id,
+        invoice_id: invoice.id
+      });
+      
+      console.log('📧 Payment failure email sent via Pabbly:', pabblySuccess);
+    } else {
+      console.log('🧪 Test mode - would send payment failure email to:', customer.email);
+    }
     
   } catch (error) {
     console.error('❌ Payment failure processing error:', error);
@@ -374,8 +447,8 @@ async function handlePaymentFailed(invoice) {
 }
 
 // Handle refunds and disputes
-async function handleRefundOrDispute(object) {
-  console.log('🔄 Refund/dispute detected:', object.id);
+async function handleRefundOrDispute(object, isTestMode = false) {
+  console.log(`🔄 Refund/dispute detected (${isTestMode ? 'TEST' : 'LIVE'}):`, object.id);
   
   try {
     let subscriptionId;
@@ -404,20 +477,125 @@ async function handleRefundOrDispute(object) {
       
       console.log('🚫 License deactivated for refund/dispute:', customer.email);
       
-      // Send refund notification email via Pabbly
-      const pabblySuccess = await sendToPabbly(customer.email, null, 'refund_dispute', {
-        customer_name: customer.name || 'Customer',
-        subscription_id: subscriptionId,
-        dispute_id: object.id,
-        reason: object.reason || 'refund'
-      });
-      
-      console.log('📧 Refund notification email sent via Pabbly:', pabblySuccess);
+      // Send refund notification email via Pabbly (only in live mode)
+      if (!isTestMode) {
+        const pabblySuccess = await sendToPabbly(customer.email, null, 'refund_dispute', {
+          customer_name: customer.name || 'Customer',
+          subscription_id: subscriptionId,
+          dispute_id: object.id,
+          reason: object.reason || 'refund'
+        });
+        
+        console.log('📧 Refund notification email sent via Pabbly:', pabblySuccess);
+      } else {
+        console.log('🧪 Test mode - would send refund notification to:', customer.email);
+      }
     }
     
   } catch (error) {
     console.error('❌ Refund/dispute processing error:', error);
     throw error;
+  }
+}
+
+// Helper: Map Stripe price IDs to plan types
+function getPlanTypeFromPriceId(priceId) {
+  const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+  
+  // Get price IDs from environment variables
+  const test5SitePrice = process.env.STRIPE_PRICE_ID_5SITE_TEST;
+  const testAnnualPrice = process.env.STRIPE_PRICE_ID_ANNUAL_TEST;
+  const testUnlimitedPrice = process.env.STRIPE_PRICE_ID_UNLIMITED_TEST;
+  
+  const live5SitePrice = process.env.STRIPE_PRICE_ID_5SITE;
+  const liveAnnualPrice = process.env.STRIPE_PRICE_ID_ANNUAL;
+  const liveUnlimitedPrice = process.env.STRIPE_PRICE_ID_UNLIMITED;
+  
+  const planMapping = {
+    // Live mode price IDs
+    [live5SitePrice]: 'professional',      // 5 sites monthly
+    [liveAnnualPrice]: 'annual_unlimited', // Unlimited annual
+    [liveUnlimitedPrice]: 'lifetime_unlimited', // Lifetime
+    
+    // Test mode price IDs  
+    [test5SitePrice]: 'professional',      // 5 sites monthly (test)
+    [testAnnualPrice]: 'annual_unlimited', // Unlimited annual (test)
+    [testUnlimitedPrice]: 'lifetime_unlimited', // Lifetime (test)
+  };
+  
+  return planMapping[priceId] || 'professional';
+}
+
+// Helper: Map price IDs to site limits
+function getMaxSitesFromPriceId(priceId) {
+  const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+  
+  // Get price IDs from environment variables
+  const test5SitePrice = process.env.STRIPE_PRICE_ID_5SITE_TEST;
+  const testAnnualPrice = process.env.STRIPE_PRICE_ID_ANNUAL_TEST;
+  const testUnlimitedPrice = process.env.STRIPE_PRICE_ID_UNLIMITED_TEST;
+  
+  const live5SitePrice = process.env.STRIPE_PRICE_ID_5SITE;
+  const liveAnnualPrice = process.env.STRIPE_PRICE_ID_ANNUAL;
+  const liveUnlimitedPrice = process.env.STRIPE_PRICE_ID_UNLIMITED;
+  
+  const siteMapping = {
+    // Live mode
+    [live5SitePrice]: 5,        // 5 sites monthly
+    [liveAnnualPrice]: -1,      // Unlimited annual (-1 = unlimited)
+    [liveUnlimitedPrice]: -1,   // Lifetime unlimited
+    
+    // Test mode
+    [test5SitePrice]: 5,        // 5 sites monthly (test)
+    [testAnnualPrice]: -1,      // Unlimited annual (test)
+    [testUnlimitedPrice]: -1,   // Lifetime unlimited (test)
+  };
+  
+  return siteMapping[priceId] || 5;
+}
+
+// Helper: Save license to database
+async function saveLicenseToDatabase(licenseData) {
+  try {
+    await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name,
+        purchase_source, trial_expires, site_limit, kill_switch_enabled, 
+        resale_monitoring, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+    `, [
+      licenseData.licenseKey,
+      licenseData.planType,
+      'active',
+      licenseData.email,
+      licenseData.name,
+      'stripe_payment_link',
+      null, // trial_expires
+      licenseData.maxSites,
+      true,
+      true
+    ]);
+    
+    console.log('✅ License saved to database:', licenseData.email);
+  } catch (error) {
+    console.error('❌ Database save error:', error);
+    throw error;
+  }
+}
+
+// Helper: Send welcome email
+async function sendWelcomeEmail(email, name, licenseKey) {
+  try {
+    const pabblySuccess = await sendToPabbly(email, licenseKey, 'welcome', {
+      customer_name: name,
+      license_key: licenseKey
+    });
+    
+    console.log('📧 Welcome email sent via Pabbly:', pabblySuccess);
+    return pabblySuccess;
+  } catch (error) {
+    console.error('❌ Welcome email error:', error);
+    return false;
   }
 }
 
