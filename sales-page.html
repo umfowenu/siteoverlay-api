@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SiteOverlay Pro - Stop Clients from Stealing Your Rank & Rent Sites</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .hero-bg { background: linear-gradient(135deg, #f0f4ff 0%, #e8f2ff 100%); }
+        .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+        .savings-badge { background: linear-gradient(45deg, #10b981, #059669); animation: pulse 2s infinite; }
+        @keyframes pulse {0%, 100% {transform: scale(1);} 50% {transform: scale(1.05);}}
+        .winner-card { border: 3px solid #10b981; position: relative; overflow: hidden; }
+        .winner-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #10b981, #059669); }
+        .competitor-card { border: 2px solid #e5e7eb; opacity: 0.8; }
+    </style>
+</head>
+<body class="bg-white">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <img src="siteoverlaypro-logo.svg" alt="SiteOverlay Pro Logo" class="h-11 w-auto mr-3" style="margin-top:-3px;">
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <a href="#features" class="text-gray-600 hover:text-gray-900">How It Works</a>
+                    <a href="#value" class="text-gray-600 hover:text-gray-900">Value Breakdown</a>
+                    <a href="#faq" class="text-gray-600 hover:text-gray-900">FAQ</a>
+                </nav>
+                <a href="#purchase" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
+                    Purchase Options
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-bg py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid lg:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h1 class="text-5xl font-bold text-gray-900 leading-tight mb-6">
+                        Stop Clients from Stealing Your 
+                        <span class="text-blue-600">Rank & Rent</span> Sites
+                    </h1>
+                    <p class="text-xl text-gray-600 mb-8">
+                        You do all the work, rank a site, generate leads… then the client <span class="font-bold text-red-600">fires you</span> and keeps all the leads. Never again.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <a href="#value" class="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors">
+                            Value Breakdown
+                        </a>
+                        <a href="#features" class="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-50 transition-colors">
+                            See How It Works
+                        </a>
+                    </div>
+                </div>
+                <div class="relative">
+                    <img src="hero-image-5Q_VIl9G.png" alt="SiteOverlay Pro Demo" class="rounded-2xl shadow-2xl w-full max-w-xl mx-auto" style="min-width:340px; max-width:480px;">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ABOVE-THE-FOLD PAYMENT CARDS -->
+    <section id="purchase" class="bg-gray-50 pt-10 pb-4">
+        <div class="max-w-4xl mx-auto grid md:grid-cols-2 gap-8">
+            <!-- Professional Plan -->
+            <div class="bg-white rounded-2xl p-8 card-shadow border-2 border-gray-200 hover:border-blue-300 transition-colors">
+                <div class="text-center mb-8">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">5 Sites</h3>
+                    <div class="text-5xl font-bold text-blue-600 mb-2">$35<span class="text-2xl text-gray-500">/month</span></div>
+                    <p class="text-gray-600">Or $420/year</p>
+                    <p class="text-sm text-green-600 font-semibold mt-2">14-day free trial included</p>
+                </div>
+                <a href="https://buy.stripe.com/test_8x2dR862z2gOct68yWdnW01" target="_blank" class="w-full bg-blue-600 text-white py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors mb-4 block text-center">
+                    Start Monthly Plan
+                </a>
+                <p class="text-center text-sm text-gray-500">Cancel anytime</p>
+            </div>
+            <!-- Unlimited Plan -->
+            <div class="bg-white rounded-2xl p-8 card-shadow border-2 border-purple-400 relative">
+                <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                    <span class="bg-purple-600 text-white px-6 py-2 rounded-full text-sm font-bold">BEST VALUE</span>
+                </div>
+                <div class="text-center mb-8">
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">Unlimited Sites</h3>
+                    <div class="text-5xl font-bold text-purple-600 mb-2">$197<span class="text-2xl text-gray-500"> per-year</span></div>
+                    <p class="text-gray-600">Annual license</p>
+                    <p class="text-sm text-green-600 font-semibold mt-2">14-day free trial included</p>
+                </div>
+                <a href="https://buy.stripe.com/test_5kQ28qcqXdZw9gU7uSdnW02" target="_blank" class="w-full bg-purple-600 text-white py-4 rounded-lg text-lg font-semibold hover:bg-purple-700 transition-colors mb-4 block text-center">
+                    Buy Annual
+                </a>
+                <p class="text-center text-sm text-gray-500">≈ $24.75/month for unlimited sites</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem/Solution Section -->
+    <section class="py-20 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-2 gap-12">
+                <!-- The Nightmare -->
+                <div class="bg-white rounded-2xl p-8 card-shadow border-l-4 border-blue-500 flex flex-col justify-center">
+                    <div class="flex items-center mb-6">
+                        <i class="fas fa-exclamation-triangle text-blue-500 text-2xl mr-4"></i>
+                        <h3 class="text-2xl font-bold text-gray-900">The Nightmare</h3>
+                    </div>
+                    <p class="text-gray-700 mb-4 text-lg">
+                        You do all the work, rank a site, generate leads… then the client <span class="font-bold text-red-600">fires you</span> and keeps all the leads. Never again.
+                    </p>
+                    <p class="italic text-gray-500">
+                        "Months of work—gone in an instant."
+                    </p>
+                </div>
+                <!-- The Dream -->
+                <div class="bg-white rounded-2xl p-8 card-shadow border-l-4 border-purple-500 flex flex-col justify-center">
+                    <div class="flex items-center mb-6">
+                        <i class="fas fa-heart text-purple-500 text-2xl mr-4"></i>
+                        <h3 class="text-2xl font-bold text-gray-900">The Dream</h3>
+                    </div>
+                    <p class="text-gray-700 mb-4 text-lg">
+                        With SiteOverlay Pro, you <b>own</b> the ranked site. Rent to any business, overlay their site in seconds. If they stop paying, <b>swap to their competitor</b>—<span class="text-purple-700 font-bold">no downtime, no lost leads.</span>
+                    </p>
+                    <p class="italic text-gray-500">
+                        "Your asset, your revenue, forever."
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="features" class="py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl font-bold text-gray-900 mb-4">How SiteOverlay Pro Works</h2>
+                <p class="text-xl text-gray-600">
+                    Simple steps to secure your revenue and take control of your rank & rent business
+                </p>
+            </div>
+            <div class="grid md:grid-cols-4 gap-8">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl font-bold text-blue-600">1</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Rank Your WordPress Site</h3>
+                    <p class="text-gray-600 text-sm">
+                        Continue building and ranking high-authority WordPress websites in lucrative local business niches.
+                    </p>
+                </div>
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl font-bold text-blue-600">2</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Install SiteOverlay Pro</h3>
+                    <p class="text-gray-600 text-sm">
+                        Simply install the WordPress plugin on your ranking WordPress site and enter the client's website home page URL—done!
+                    </p>
+                </div>
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl font-bold text-blue-600">3</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Overlay Client's Website</h3>
+                    <p class="text-gray-600 text-sm">
+                        Seamlessly display your client's website over your ranked site. Visitors see the client's site and call them directly.
+                    </p>
+                </div>
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl font-bold text-blue-600">4</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Maintain Control & Revenue</h3>
+                    <p class="text-gray-600 text-sm">
+                        If clients stop paying, instantly switch to their competitor's site. Your ranked asset always generates income.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Comparison & Savings -->
+    <section id="value" class="py-20 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl font-bold text-gray-900 mb-4">Why Smart Marketers Choose SiteOverlay Pro</h2>
+                <p class="text-xl text-gray-600">The competition charges 4x more and offers less value</p>
+            </div>
+            <div class="bg-white rounded-3xl shadow-2xl p-8 mb-12">
+                <div class="grid lg:grid-cols-2 gap-8">
+                    <!-- SiteOverlay Pro (Winner) -->
+                    <div class="winner-card bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl p-8">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-2xl font-bold text-gray-900">SiteOverlay Pro</h3>
+                            <div class="savings-badge text-white px-4 py-2 rounded-full text-sm font-bold">
+                                THE CLEAR WINNER
+                            </div>
+                        </div>
+                        <div class="space-y-4 mb-8">
+                            <div class="flex justify-between items-center py-3 border-b border-gray-200">
+                                <span class="text-gray-700">5 Sites</span>
+                                <div class="text-right">
+                                    <div class="text-2xl font-bold text-green-600">$35<span class="text-lg text-gray-500">/mo</span></div>
+                                    <div class="text-sm text-gray-500">$420/year</div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center py-3 border-b border-gray-200">
+                                <span class="text-gray-700">Unlimited Sites</span>
+                                <div class="text-right">
+                                    <div class="text-2xl font-bold text-blue-600">$197<span class="text-lg text-gray-500">/year</span></div>
+                                    <div class="text-sm text-green-600 font-semibold">Annual subscription</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-green-100 rounded-lg p-4 mb-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                                <span class="font-semibold text-green-800">Break even in just 5.6 months</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex items-center">
+                                <i class="fas fa-check text-green-600 mr-2"></i>
+                                <span>Lifetime updates included</span>
+                            </div>
+                            <div class="flex items-center">
+                                <i class="fas fa-check text-green-600 mr-2"></i>
+                                <span>14-day free trial</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Competitor (Loser) -->
+                    <div class="competitor-card bg-gray-50 rounded-2xl p-8 relative">
+                        <div class="absolute top-4 right-4">
+                            <span class="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-bold">OVERPRICED</span>
+                        </div>
+                        <h3 class="text-2xl font-bold text-gray-600 mb-6">Rank & Rent Plugin Pro</h3>
+                        <div class="space-y-4 mb-8">
+                            <div class="flex justify-between items-center py-3	border-b	border-gray-200">
+                                <span class="text-gray-600">5 Sites</span>
+                                <div class="text-right">
+                                    <div class="text-2xl font-bold text-red-600">$129.99<span class="text-lg text-gray-500">/mo</span></div>
+                                    <div class="text-sm text-gray-500">$1,169.91/year</div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center py-3	border-b	border-gray-200">
+                                <span class="text-gray-600">15 Sites</span>
+                                <div class="text-right">
+                                    <div class="text-2xl font-bold text-red-600">$399.99<span class="text-lg text-gray-500">/mo</span></div>
+                                    <div class="text-sm text-gray-500">$3,599.91/year</div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center py-3	border-b	border-gray-200">
+                                <span class="text-gray-600">Unlimited Sites</span>
+                                <div class="text-right">
+                                    <div class="text-lg text-red-600 font-bold">Not Available</div>
+                                    <div class="text-sm text-gray-500">Pay forever</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-red-100 rounded-lg p-4 mb-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                                <span class="font-semibold text-red-800">Expensive monthly fees forever</span>
+                            </div>
+                        </div>
+                        <div class="space-y-2 text-sm text-gray-500">
+                            <div class="flex items-center">
+                                <i class="fas fa-times text-red-500 mr-2"></i>
+                                <span>No lifetime option</span>
+                            </div>
+                            <div class="flex items-center">
+                                <i class="fas fa-times text-red-500 mr-2"></i>
+                                <span>Expensive recurring fees</span>
+                            </div>
+                            <div class="flex items-center">
+                                <i class="fas fa-times text-red-500 mr-2"></i>
+                                <span>Limited site options</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Savings Callout -->
+                <div class="text-center mt-8">
+                    <div class="bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-2xl p-8">
+                        <h3 class="text-3xl font-bold mb-4">SAVE $446 in Just 2 Years!</h3>
+                        <div class="grid md:grid-cols-3 gap-6 text-center">
+                            <div>
+                                <div class="text-4xl font-bold">53%</div>
+                                <div class="text-lg opacity-90">Less Expensive</div>
+                            </div>
+                            <div>
+                                <div class="text-4xl font-bold">5.6</div>
+                                <div class="text-lg opacity-90">Month Break-Even</div>
+                            </div>
+                            <div>
+                                <div class="text-4xl font-bold">$223</div>
+                                <div class="text-lg opacity-90">Saved Per Year</div>
+                            </div>
+                        </div>
+                        <p class="mt-4 text-lg opacity-90">
+                            Stop paying forever. Own it once. Profit for life.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <!-- Pricing Cards (again at the bottom) -->
+        </div>
+    </section>
+
+    <!-- Pricing Cards (again at the bottom) -->
+<div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-10">
+  <!-- Professional Plan -->
+  <div class="bg-white rounded-2xl p-8 card-shadow border-2 border-gray-200 hover:border-blue-300 transition-colors">
+    <div class="text-center mb-8">
+      <h3 class="text-2xl font-bold text-gray-900 mb-2">5 Sites</h3>
+      <div class="text-5xl font-bold text-blue-600 mb-2">$35<span class="text-2xl text-gray-500">/month</span></div>
+      <p class="text-gray-600">Or $420/year</p>
+      <p class="text-sm text-green-600 font-semibold mt-2">14-day free trial included</p>
+    </div>
+    <a href="https://buy.stripe.com/test_8x2dR862z2gOct68yWdnW01" target="_blank" class="w-full bg-blue-600 text-white py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors mb-4 block text-center">
+      Start Monthly Plan
+    </a>
+    <p class="text-center text-sm text-gray-500">Cancel anytime</p>
+  </div>
+  <!-- Unlimited Plan -->
+  <div class="bg-white rounded-2xl p-8 card-shadow border-2 border-purple-400 relative">
+    <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+      <span class="bg-purple-600 text-white px-6 py-2 rounded-full text-sm font-bold">BEST VALUE</span>
+    </div>
+    <div class="text-center mb-8">
+      <h3 class="text-2xl font-bold text-gray-900 mb-2">Unlimited Sites</h3>
+      <div class="text-5xl font-bold text-purple-600 mb-2">$197<span class="text-2xl text-gray-500"> per-year</span></div>
+      <p class="text-gray-600">Annual license</p>
+      <p class="text-sm text-green-600 font-semibold mt-2">14-day free trial included</p>
+    </div>
+    <a href="https://buy.stripe.com/test_5kQ28qcqXdZw9gU7uSdnW02" target="_blank" class="w-full bg-purple-600 text-white py-4 rounded-lg text-lg font-semibold hover:bg-purple-700 transition-colors mb-4 block text-center">
+      Buy Annual
+    </a>
+    <p class="text-center text-sm text-gray-500">≈ $24.75/month for unlimited sites</p>
+  </div>
+</div>
+
+<div class="text-center mt-8">
+  <p class="text-lg text-gray-600 flex justify-center items-center gap-2">
+    <i class="fas fa-shield-alt text-green-600"></i>
+    <strong>Your unlimited, annual license costs less than their yearly 5-site plan!</strong>
+  </p>
+</div>
+
+
+    <!-- FAQ Section -->
+    <section id="faq" class="py-20">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
+            </div>
+            <div class="space-y-6">
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Will this affect my site's SEO?</h3>
+                    <p class="text-gray-600">No, your rankings remain yours and overlays don't create duplicate content penalties. Your asset stays safe.</p>
+                </div>
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">What if a client stops paying?</h3>
+                    <p class="text-gray-600">You simply remove their overlay and add their main competitor in seconds. You never lose leads again!</p>
+                </div>
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Is it really instant to swap?</h3>
+                    <p class="text-gray-600">Yes—swap overlays by simply adding the new web page URL into the plugin and save. It takes less than 10 seconds.</p>
+                </div>
+                <div class="bg-white rounded-lg p-6 card-shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Is there a refund or trial?</h3>
+                    <p class="text-gray-600">There is a 14-day free trial so you can test and decide before you buy.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <span class="text-xl font-bold">SiteOverlay Pro</span>
+                <p class="text-gray-400 mb-8 mt-4">Protect your rank & rent business. Maintain control. Scale with confidence.</p>
+                <div class="flex justify-center space-x-8 text-sm text-gray-400">
+                    <a href="https://ebiz360.ca/privacy-policy/" class="hover:text-white">Privacy</a>
+                    <a href="https://ebiz360.ca/terms-of-service/" class="hover:text-white">Terms</a>
+                    <a href="https://ebiz360.ca/contact-us/" class="hover:text-white">Contact</a>
+                </div>
+                <p class="text-gray-500 text-sm mt-8">© 2025 SiteOverlay Pro. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scrolling for navigation links and adjusted scroll for anchor targets
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                let offset = 0;
+                const header = document.querySelector('header');
+                if (header) offset = header.offsetHeight + 10;
+                const targetId = this.getAttribute('href');
+                const target = document.querySelector(targetId);
+                if (target) {
+                    const top = target.getBoundingClientRect().top + window.scrollY - offset;
+                    window.scrollTo({ top, behavior: 'smooth' });
+                }
+            });
+        });
+
+        // Add scroll effect to header
+        window.addEventListener('scroll', function() {
+            const header = document.querySelector('header');
+            if (window.scrollY > 100) {
+                header.classList.add('shadow-lg');
+            } else {
+                header.classList.remove('shadow-lg');
+            }
+        });
+    </script>
+</body>
+</html>
