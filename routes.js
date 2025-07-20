@@ -22,7 +22,27 @@ router.get('/health', (req, res) => {
     stripe_mode: isTestMode ? 'TEST' : 'LIVE',
     pabbly_trial_webhook_configured: !!process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY,
     pabbly_buyers_webhook_configured: !!process.env.PABBLY_WEBHOOK_URL_BUYERS_SITEOVERLAY,
+    old_webhook_variable_exists: !!process.env.PABBLY_WEBHOOK_URL,
+    code_version: 'v2.1-updated-env-vars',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Code verification endpoint
+router.get('/verify-code', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Code verification endpoint - confirms latest code is deployed',
+    environment_variables: {
+      PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY: process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY ? 'SET' : 'NOT_SET',
+      PABBLY_WEBHOOK_URL_BUYERS_SITEOVERLAY: process.env.PABBLY_WEBHOOK_URL_BUYERS_SITEOVERLAY ? 'SET' : 'NOT_SET',
+      PABBLY_WEBHOOK_URL: process.env.PABBLY_WEBHOOK_URL ? 'SET (OLD)' : 'NOT_SET',
+    },
+    code_status: {
+      using_new_variables: true,
+      sendToPabbly_updated: true,
+      diagnostic_endpoints_updated: true
+    }
   });
 });
 
