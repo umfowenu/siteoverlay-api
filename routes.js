@@ -1671,18 +1671,29 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       support_email: 'support@siteoverlaypro.com'
     };
 
-    console.log('Sending to Pabbly Connect (Trial):', { email, licenseKey, licenseType });
+    console.log('🔍 DEBUG: Starting Pabbly webhook process...');
+    console.log('📧 DEBUG: Email:', email);
+    console.log('🔑 DEBUG: License Key:', licenseKey);
+    console.log('📋 DEBUG: License Type:', licenseType);
+    console.log('📊 DEBUG: Metadata:', JSON.stringify(metadata, null, 2));
 
     // Determine webhook URL based on product and license type
     let webhookUrl;
     if (licenseType === 'trial') {
       webhookUrl = process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY;
+      console.log('🎯 DEBUG: Using TRIAL webhook URL');
     } else {
       webhookUrl = process.env.PABBLY_WEBHOOK_URL_BUYERS_SITEOVERLAY;
+      console.log('🎯 DEBUG: Using BUYERS webhook URL');
     }
+
+    console.log('🔗 DEBUG: Webhook URL:', webhookUrl);
+    console.log('📤 DEBUG: Complete Pabbly Data:', JSON.stringify(pabblyData, null, 2));
 
     // Send to Pabbly Connect webhook
     if (webhookUrl) {
+      console.log('🚀 DEBUG: Attempting to send webhook to Pabbly...');
+      
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
@@ -1691,21 +1702,34 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
         body: JSON.stringify(pabblyData)
       });
 
+      console.log('📡 DEBUG: Pabbly Response Status:', response.status);
+      console.log('📡 DEBUG: Pabbly Response Headers:', Object.fromEntries(response.headers.entries()));
+
       if (response.ok) {
-        console.log('✅ Pabbly Connect successful for:', email);
+        const responseText = await response.text();
+        console.log('✅ DEBUG: Pabbly Connect successful for:', email);
+        console.log('📄 DEBUG: Pabbly Response Body:', responseText);
         return true;
       } else {
         const errorText = await response.text();
-        console.error('❌ Pabbly webhook failed:', response.status, errorText);
+        console.error('❌ DEBUG: Pabbly webhook failed');
+        console.error('❌ DEBUG: Status Code:', response.status);
+        console.error('❌ DEBUG: Error Response:', errorText);
+        console.error('❌ DEBUG: Response Headers:', Object.fromEntries(response.headers.entries()));
         return false;
       }
     } else {
-      console.log('⚠️  No Pabbly webhook URL configured - data stored locally only');
+      console.log('⚠️  DEBUG: No Pabbly webhook URL configured');
+      console.log('⚠️  DEBUG: Environment variable not set');
+      console.log('⚠️  DEBUG: Data stored locally only');
       return true; // System works without Pabbly initially
     }
 
   } catch (error) {
-    console.error('❌ Pabbly integration error:', error);
+    console.error('❌ DEBUG: Pabbly integration error');
+    console.error('❌ DEBUG: Error Type:', error.constructor.name);
+    console.error('❌ DEBUG: Error Message:', error.message);
+    console.error('❌ DEBUG: Error Stack:', error.stack);
     return false;
   }
 }
