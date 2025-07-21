@@ -1706,7 +1706,7 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       trial_expires: metadata.trial_expires || '',
       
       // AWeber tagging
-      aweber_tags: 'trial',
+      aweber_tags: licenseType === 'trial' ? 'trial-active' : licenseType,
       
       // Additional context for Pabbly
       license_type: licenseType,
@@ -1814,7 +1814,7 @@ router.get('/test-pabbly', async (req, res) => {
       license_key: "TRIAL-TEST-XXXX-XXXX",
       site_url: "https://ebiz360.ca",
       trial_expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      aweber_tags: "trial",
+      aweber_tags: "trial-active",
       license_type: "trial",
       product_name: "SiteOverlay Pro",
       trial_duration: "14 days",
