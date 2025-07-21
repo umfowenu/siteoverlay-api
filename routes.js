@@ -46,6 +46,53 @@ router.get('/verify-code', (req, res) => {
   });
 });
 
+// Database schema verification endpoint
+router.get('/verify-database', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    
+    // Check if email_collection table exists and has customer_name column
+    const tableCheck = await client.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'email_collection' 
+      AND column_name = 'customer_name'
+    `);
+    
+    // Get all columns in email_collection table
+    const allColumns = await client.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'email_collection'
+      ORDER BY ordinal_position
+    `);
+    
+    client.release();
+    
+    const hasCustomerNameColumn = tableCheck.rows.length > 0;
+    
+    res.json({
+      status: 'success',
+      message: 'Database schema verification complete',
+      emailCollectionTable: {
+        hasCustomerNameColumn,
+        customerNameColumnDetails: hasCustomerNameColumn ? tableCheck.rows[0] : null,
+        allColumns: allColumns.rows
+      },
+      verification: {
+        timestamp: new Date().toISOString(),
+        databaseConnected: true
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Database verification failed',
+      error: error.message
+    });
+  }
+});
+
 // Enhanced Stripe webhook endpoint with test/live mode detection
 router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
