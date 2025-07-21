@@ -1687,6 +1687,14 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       console.log('🎯 DEBUG: Using BUYERS webhook URL');
     }
 
+    // 🔍 ENVIRONMENT VARIABLE DEBUGGING
+    console.log('🔍 DEBUG: All Pabbly-related env vars:');
+    console.log('PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY:', process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY);
+    console.log('Variable exists?', 'PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY' in process.env);
+    console.log('Variable length:', process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY?.length);
+    console.log('All env vars containing PABBLY:', Object.keys(process.env).filter(key => key.includes('PABBLY')));
+    console.log('All env vars containing WEBHOOK:', Object.keys(process.env).filter(key => key.includes('WEBHOOK')));
+
     console.log('🔗 DEBUG: Webhook URL:', webhookUrl);
     console.log('📤 DEBUG: Complete Pabbly Data:', JSON.stringify(pabblyData, null, 2));
 
