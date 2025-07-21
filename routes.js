@@ -1344,7 +1344,7 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       
       // AWeber mapping fields (Pabbly will handle these)
       aweber_list: 'siteoverlay-pro',
-      aweber_tags: [licenseType, 'siteoverlay-pro', 'wordpress-plugin'].join(','),
+      aweber_tags: [licenseType === 'trial' ? 'trial-active' : licenseType, 'siteoverlay-pro', 'wordpress-plugin'].join(','),
       
       // Email template variables
       product_name: 'SiteOverlay Pro',
