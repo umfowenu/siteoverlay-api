@@ -5,6 +5,18 @@ const db = require('./db');
 const mailer = require('./mailer');
 const crypto = require('crypto');
 
+// Import utility modules
+const { 
+  getLicenseTypeFromStripePrice,
+  getLicenseTypeFromPayPalAmount, 
+  getLicenseTypeFromWarriorPlusProduct,
+  getSiteLimitFromLicenseType,
+  generateLicenseKey,
+  generateSiteSignature
+} = require('./utils/license-mappings');
+
+const { sendToPabbly } = require('./utils/pabbly-utils');
+
 // (All old utility function definitions are now removed from the bottom of the file, only initializeDatabase and module.exports = router remain)
 
 // Payment processor integrations
