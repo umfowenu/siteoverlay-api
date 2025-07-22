@@ -187,15 +187,15 @@ async function handleCheckoutCompleted(session, isTestMode = false) {
       const licenseResult = await db.query(`
         INSERT INTO licenses (
           license_key, license_type, status, customer_email, customer_name,
-          purchase_source, purchase_date, renewal_date, subscription_id, 
-          subscription_status, stripe_price_id, amount_paid, site_limit, 
+          purchase_date, renewal_date, subscription_id, subscription_status,
+          stripe_price_id, amount_paid, purchase_source, site_limit, 
           kill_switch_enabled, resale_monitoring, created_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
         RETURNING id
       `, [
         licenseKey, licenseConfig.type, 'active', customerEmail, customerName,
-        'stripe_checkout', new Date(), renewalDate, subscription.id, 
-        subscription.status, priceId, session.amount_total / 100, 
+        new Date(), renewalDate, subscription.id, subscription.status,
+        priceId, session.amount_total / 100, 'stripe_checkout',
         siteLimit, true, true
       ]);
       const licenseId = licenseResult.rows[0].id;
@@ -381,7 +381,7 @@ async function handlePlanChange(oldLicense, newLicenseConfig, subscription, cust
       license_key, license_type, status, customer_email, customer_name,
       purchase_date, renewal_date, subscription_id, subscription_status,
       stripe_price_id, site_limit, is_upgrade, previous_license_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     RETURNING id
   `, [
     newLicenseKey, newLicenseConfig.type, 'active', customer.email, customer.name,
@@ -400,7 +400,7 @@ async function handlePlanChange(oldLicense, newLicenseConfig, subscription, cust
       license_id, customer_email, transaction_type, old_license_type, new_license_type,
       old_license_key, new_license_key, stripe_subscription_id, stripe_price_id,
       purchase_date, renewal_date, sites_migrated
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
   `, [
     newLicenseResult.rows[0].id, customer.email, isUpgrade ? 'upgrade' : 'downgrade',
     oldLicense.license_type, newLicenseConfig.type, oldLicense.license_key, newLicenseKey,
