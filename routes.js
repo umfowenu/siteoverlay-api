@@ -919,6 +919,14 @@ router.post('/validate-license', async (req, res) => {
         message: `License is ${license.status}`
       });
     }
+
+    // Check kill switch
+    if (license.kill_switch_enabled === false) {
+      return res.json({
+        success: false,
+        message: 'This license has been disabled. Please contact support.'
+      });
+    }
     
     // Check license expiration (for trial and annual subscriptions)
     if (license.trial_expires) {
@@ -1689,6 +1697,26 @@ router.get('/admin/licenses', async (req, res) => {
       message: 'Failed to list licenses'
     });
   }
+});
+
+// Admin endpoint to control kill switch
+router.post('/admin/toggle-kill-switch', async (req, res) => {
+  const { license_key, enabled, admin_key } = req.body;
+
+  // Verify admin access (you'll need to implement admin authentication)
+  if (admin_key !== process.env.ADMIN_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  await db.query(
+    'UPDATE licenses SET kill_switch_enabled = $1 WHERE license_key = $2',
+    [enabled, license_key]
+  );
+
+  res.json({
+    success: true,
+    message: `Kill switch ${enabled ? 'enabled' : 'disabled'} for license ${license_key}`
+  });
 });
 
 // Pabbly Connect integration function
