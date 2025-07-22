@@ -21,6 +21,10 @@ const { sendToPabbly } = require('./utils/pabbly-utils');
 const trialsRoutes = require('./routes/trials');
 const newsletterRoutes = require('./routes/newsletter');
 const adminRoutes = require('./routes/admin');
+// Import payment processor modules
+const stripeRoutes = require('./routes/stripe');
+const paypalRoutes = require('./routes/paypal');
+const warriorplusRoutes = require('./routes/warriorplus');
 
 // (All old utility function definitions are now removed from the bottom of the file, only initializeDatabase and module.exports = router remain)
 
@@ -40,6 +44,10 @@ router.get('/health', (req, res) => {
 router.use('/', trialsRoutes);
 router.use('/', newsletterRoutes);
 router.use('/', adminRoutes);
+// Register payment processor modules
+router.use('/', stripeRoutes);
+router.use('/', paypalRoutes);
+router.use('/', warriorplusRoutes);
 
 // ============================================================================
 // STRIPE WEBHOOK HANDLING
