@@ -1076,14 +1076,48 @@ router.post('/start-trial', async (req, res) => {
       });
     }
 
-    // Generate trial license
     const trialLicenseKey = 'TRIAL-' + generateLicenseKey();
+    const trialSiteLimit = 5;
+    const now = new Date();
+    const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-    // Create trial license
+    // Create trial license with new schema
+    const trialResult = await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name,
+        purchase_date, trial_end_date, subscription_id, subscription_status,
+        stripe_price_id, amount_paid, purchase_source, site_limit, 
+        kill_switch_enabled, resale_monitoring, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+      RETURNING id
+    `, [
+      trialLicenseKey, 
+      'trial', 
+      'trial', 
+      email,
+      full_name,
+      now,                // purchase_date
+      trialEnd,           // trial_end_date (renamed from trial_expires)
+      null,               // subscription_id
+      null,               // subscription_status
+      null,               // stripe_price_id
+      0,                  // amount_paid (trials are free)
+      'email_trial_request',
+      trialSiteLimit,     // Trial gets 5 sites
+      true,
+      true
+    ]);
+    const trialLicenseId = trialResult.rows[0].id;
+
+    // Record in purchase history
     await db.query(`
-      INSERT INTO licenses (license_key, license_type, status, customer_name, purchase_source, site_limit)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `, [trialLicenseKey, 'trial', 'trial', 'Trial User', 'trial_signup', 5]);
+      INSERT INTO purchase_history (
+        license_id, customer_email, transaction_type, new_license_type,
+        new_license_key, purchase_date, renewal_date, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      trialLicenseId, email, 'trial', 'trial', trialLicenseKey, now, trialEnd, 'Trial license issued'
+    ]);
 
     // Track installation
     await trackInstallation(trialLicenseKey, siteUrl, req.body);
@@ -1095,8 +1129,8 @@ router.post('/start-trial', async (req, res) => {
         license_key: trialLicenseKey,
         license_type: 'trial',
         status: 'trial',
-        site_limit: 5,
-        expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        site_limit: trialSiteLimit,
+        expires: trialEnd.toISOString(),
         company: 'eBiz360'
       }
     });
