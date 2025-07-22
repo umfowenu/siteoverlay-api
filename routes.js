@@ -1,10 +1,11 @@
+// SiteOverlay Pro API - Enhanced Version
 const express = require('express');
 const router = express.Router();
 const db = require('./db');
 const mailer = require('./mailer');
 const crypto = require('crypto');
 
-// Stripe integration
+// Payment processor integrations
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Health check endpoint
@@ -16,7 +17,10 @@ router.get('/health', (req, res) => {
   });
 });
 
-// NEW: Stripe webhook endpoint for payment processing
+// ============================================================================
+// STRIPE WEBHOOK HANDLING
+// ============================================================================
+
 router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -30,7 +34,6 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
   }
 
   try {
-    // Handle the event
     switch (event.type) {
       case 'checkout.session.completed':
         await handleCheckoutCompleted(event.data.object);
@@ -51,511 +54,574 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
         await handlePaymentFailed(event.data.object);
         break;
       default:
-        console.log(`Unhandled event type ${event.type}`);
+        console.log(`Unhandled Stripe event type: ${event.type}`);
     }
 
     res.json({received: true});
   } catch (error) {
-    console.error('❌ Stripe webhook processing error:', error);
-    res.status(500).json({error: 'Webhook processing failed'});
+    console.error('❌ Stripe webhook handling error:', error);
+    res.status(500).json({error: 'Webhook handling failed'});
   }
 });
 
-// Handle successful checkout completion
-async function handleCheckoutCompleted(session) {
-  console.log('🛒 Processing checkout completion:', session.id);
-  
+// ============================================================================
+// PAYPAL WEBHOOK HANDLING
+// ============================================================================
+
+router.post('/paypal/webhook', express.json(), async (req, res) => {
   try {
-    // Get line items to determine product
-    const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
-      expand: ['data.price.product']
-    });
+    console.log('🎯 PayPal webhook received:', req.body.event_type);
+
+    const event = req.body;
     
-    if (!lineItems.data.length) {
-      console.error('❌ No line items found for session:', session.id);
-      return;
+    // Verify PayPal webhook signature (implement based on PayPal docs)
+    // For now, we'll process without verification (add verification in production)
+
+    switch (event.event_type) {
+      case 'PAYMENT.SALE.COMPLETED':
+        await handlePayPalPayment(event.resource);
+        break;
+      case 'BILLING.SUBSCRIPTION.CREATED':
+        await handlePayPalSubscriptionCreated(event.resource);
+        break;
+      case 'BILLING.SUBSCRIPTION.CANCELLED':
+        await handlePayPalSubscriptionCancelled(event.resource);
+        break;
+      case 'BILLING.SUBSCRIPTION.PAYMENT.FAILED':
+        await handlePayPalPaymentFailed(event.resource);
+        break;
+      default:
+        console.log(`Unhandled PayPal event: ${event.event_type}`);
     }
 
-    const priceId = lineItems.data[0].price.id;
-    const productId = lineItems.data[0].price.product.id;
-    const customerEmail = session.customer_details?.email;
-    const customerName = session.customer_details?.name || 'Customer';
+    res.status(200).json({status: 'success'});
+  } catch (error) {
+    console.error('❌ PayPal webhook error:', error);
+    res.status(500).json({error: 'PayPal webhook failed'});
+  }
+});
+
+// ============================================================================
+// WARRIORPLUS IPN HANDLING
+// ============================================================================
+
+router.post('/warriorplus/ipn', express.urlencoded({extended: true}), async (req, res) => {
+  try {
+    console.log('⚔️ WarriorPlus IPN received:', req.body);
+
+    // Verify IPN with WarriorPlus (implement verification)
+    // For now, we'll process without verification (add verification in production)
+
+    const ipnData = req.body;
+
+    switch (ipnData.transaction_type) {
+      case 'SALE':
+        await handleWarriorPlusSale(ipnData);
+        break;
+      case 'REFUND':
+        await handleWarriorPlusRefund(ipnData);
+        break;
+      case 'REBILL':
+        await handleWarriorPlusRebill(ipnData);
+        break;
+      case 'CANCEL':
+        await handleWarriorPlusCancel(ipnData);
+        break;
+      default:
+        console.log(`Unhandled WarriorPlus transaction: ${ipnData.transaction_type}`);
+    }
+
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('❌ WarriorPlus IPN error:', error);
+    res.status(500).send('Error');
+  }
+});
+
+// ============================================================================
+// STRIPE WEBHOOK HANDLERS
+// ============================================================================
+
+async function handleCheckoutCompleted(session) {
+  try {
+    console.log('💳 Processing Stripe checkout completion:', session.id);
+
+    const customer = await stripe.customers.retrieve(session.customer);
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+    const priceId = lineItems.data[0]?.price?.id;
+
+    // Determine license type from price ID
+    const licenseType = getLicenseTypeFromStripePrice(priceId);
+    const siteLimit = getSiteLimitFromLicenseType(licenseType);
     
-    console.log('📦 Product details:', { priceId, productId, customerEmail });
-    
-    // Determine license type based on price ID or product ID
-    const licenseConfig = getLicenseConfig(priceId, productId);
-    if (!licenseConfig) {
-      console.error('❌ Unknown product/price ID:', { priceId, productId });
-      return;
+    // Calculate renewal date
+    let renewalDate = null;
+    if (licenseType.includes('annual')) {
+      renewalDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
     }
 
     // Generate license key
-    const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
-    console.log('🔑 Generated license:', licenseKey);
+    const licenseKey = generateLicenseKey();
 
-    // Get subscription data if this is a subscription purchase
-    let subscriptionData = null;
-    if (session.mode === 'subscription' && session.subscription) {
-      const subscription = await stripe.subscriptions.retrieve(session.subscription);
-      subscriptionData = {
-        subscription_id: subscription.id,
-        subscription_status: subscription.status,
-        renewal_date: new Date(subscription.current_period_end * 1000)
-      };
-    }
-
-    // Calculate renewal date
-    let renewalDate = null;
-    if (subscriptionData) {
-      renewalDate = subscriptionData.renewal_date;
-    } else if (licenseConfig.type === 'annual_unlimited') {
-      renewalDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-    }
-
-    // Create license in database with new schema
+    // Insert license
     const licenseResult = await db.query(`
       INSERT INTO licenses (
         license_key, license_type, status, customer_email, customer_name,
         purchase_date, renewal_date, subscription_id, subscription_status,
-        stripe_price_id, amount_paid, payment_processor, purchase_source, 
+        stripe_price_id, amount_paid, payment_processor, purchase_source,
         site_limit, kill_switch_enabled, resale_monitoring, created_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
       RETURNING id
     `, [
       licenseKey,
-      licenseConfig.type,
+      licenseType,
       'active',
-      customerEmail,
-      customerName,
-      new Date(),                                    // purchase_date
-      renewalDate,                                   // renewal_date (from Stripe)
-      subscriptionData?.subscription_id || null,     // subscription_id
-      subscriptionData?.subscription_status || null, // subscription_status
-      priceId,                                       // stripe_price_id
-      session.amount_total / 100,                    // amount_paid (convert from cents)
-      'stripe',                                      // payment_processor
-      'stripe_checkout',                             // purchase_source
-      licenseConfig.siteLimit,
+      customer.email,
+      customer.name || session.customer_details?.name || 'Stripe Customer',
+      new Date(),
+      renewalDate,
+      session.subscription || null,
+      session.subscription ? 'active' : null,
+      priceId,
+      session.amount_total / 100, // Convert from cents
+      'stripe',
+      'stripe_checkout',
+      siteLimit,
       true,
       true
     ]);
 
-    // Record in purchase history
+    // Record purchase history
     await db.query(`
       INSERT INTO purchase_history (
         license_id, customer_email, transaction_type, new_license_type,
-        new_license_key, stripe_session_id, stripe_subscription_id,
-        stripe_price_id, amount_paid, purchase_date, renewal_date,
-        payment_processor, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        new_license_key, stripe_session_id, stripe_price_id, amount_paid,
+        purchase_date, renewal_date, payment_processor, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     `, [
       licenseResult.rows[0].id,
-      customerEmail,
+      customer.email,
       'purchase',
-      licenseConfig.type,
+      licenseType,
       licenseKey,
       session.id,
-      subscriptionData?.subscription_id || null,
       priceId,
       session.amount_total / 100,
       new Date(),
       renewalDate,
       'stripe',
-      'Stripe checkout purchase'
+      'Initial purchase via Stripe checkout'
     ]);
 
-    console.log('✅ License created in database');
-
-    // Send license email via Pabbly with enhanced AWeber data
-    const pabblySuccess = await sendToPabbly(customerEmail, licenseKey, licenseConfig.type, {
-      customer_name: customerName,
-      purchase_amount: session.amount_total / 100,
-      currency: session.currency,
-      stripe_session_id: session.id,
-      subscription_id: subscriptionData?.subscription_id,
-      renewal_date: renewalDate,
-      site_limit: licenseConfig.siteLimit
+    // Send to Pabbly/AWeber
+    await sendToPabbly(customer.email, licenseKey, licenseType, {
+      customer_name: customer.name || session.customer_details?.name,
+      purchase_amount: (session.amount_total / 100).toString(),
+      currency: session.currency?.toUpperCase() || 'USD',
+      payment_processor: 'stripe',
+      renewal_date: renewalDate
     });
 
-    console.log('📧 License email sent via Pabbly:', pabblySuccess);
-
-    // Track license creation for analytics
-    console.log('📊 License Analytics:', {
-      license_key: licenseKey,
-      license_type: licenseConfig.type,
-      customer_email: customerEmail,
-      amount: session.amount_total / 100,
-      currency: session.currency,
-      source: 'stripe_checkout',
-      pabblySuccess
-    });
+    console.log('✅ Stripe purchase processed:', licenseKey);
 
   } catch (error) {
-    console.error('❌ Checkout completion processing error:', error);
-    throw error;
+    console.error('❌ Stripe checkout handling error:', error);
   }
 }
 
-// Handle payment succeeded
-async function handlePaymentSucceeded(paymentIntent) {
-  console.log('💰 Payment succeeded:', paymentIntent.id);
-  // Additional payment processing if needed
-}
-
-// Handle subscription payment (renewals)
 async function handleSubscriptionPayment(invoice) {
-  console.log('🔄 Subscription payment:', invoice.id);
-  
   try {
+    console.log('🔄 Processing Stripe subscription payment:', invoice.id);
+
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
     const customer = await stripe.customers.retrieve(subscription.customer);
 
-    // Get the price ID to determine license type
-    const priceId = subscription.items.data[0]?.price?.id;
-    const productId = subscription.items.data[0]?.price?.product?.id;
-
-    // Determine license type based on price/product
-    const licenseConfig = getLicenseConfig(priceId, productId);
-    if (!licenseConfig) {
-      console.error('❌ Unknown subscription product:', { priceId, productId });
-      return;
-    }
-
-    console.log('📦 Processing subscription for license type:', licenseConfig.type);
-
-    // Update existing license with new renewal date
-    await db.query(`
-      UPDATE licenses 
-      SET renewal_date = $1, subscription_status = $2, last_seen = NOW()
-      WHERE customer_email = $3 AND subscription_id = $4
-    `, [
-      new Date(subscription.current_period_end * 1000), // Use actual Stripe renewal date
-      subscription.status,
-      customer.email,
-      subscription.id
-    ]);
-
-    // Record renewal in purchase history
-    await db.query(`
-      INSERT INTO purchase_history (
-        customer_email, transaction_type, stripe_subscription_id,
-        stripe_price_id, amount_paid, purchase_date, renewal_date,
-        payment_processor, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [
-      customer.email,
-      'renewal',
-      subscription.id,
-      priceId,
-      invoice.amount_paid / 100,
-      new Date(),
-      new Date(subscription.current_period_end * 1000),
-      'stripe',
-      'Subscription renewal payment'
-    ]);
-
-    console.log('✅ Subscription renewed for:', customer.email);
-
-  } catch (error) {
-    console.error('❌ Subscription payment processing error:', error);
-    throw error;
-  }
-}
-
-// Handle subscription cancellation
-async function handleSubscriptionCancelled(subscription) {
-  console.log('❌ Subscription cancelled:', subscription.id);
-  
-  try {
-    const customer = await stripe.customers.retrieve(subscription.customer);
-
-    // Get the price ID to determine license type
-    const priceId = subscription.items.data[0]?.price?.id;
-    const productId = subscription.items.data[0]?.price?.product?.id;
-
-    // Determine license type based on price/product
-    const licenseConfig = getLicenseConfig(priceId, productId);
-    if (!licenseConfig) {
-      console.error('❌ Unknown subscription product for cancellation:', { priceId, productId });
-      return;
-    }
-
-    console.log('📦 Cancelling subscription for license type:', licenseConfig.type);
-
-    // Deactivate license
-    await db.query(
-      'UPDATE licenses SET status = $1, subscription_status = $2 WHERE customer_email = $3 AND subscription_id = $4',
-      ['cancelled', 'cancelled', customer.email, subscription.id]
+    // Find existing license
+    const licenseResult = await db.query(
+      'SELECT * FROM licenses WHERE subscription_id = $1',
+      [subscription.id]
     );
 
-    // Record cancellation in purchase history
-    await db.query(`
-      INSERT INTO purchase_history (
-        customer_email, transaction_type, stripe_subscription_id,
-        purchase_date, payment_processor, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6)
-    `, [
-      customer.email,
-      'cancellation',
-      subscription.id,
-      new Date(),
-      'stripe',
-      'Subscription cancelled'
-    ]);
+    if (licenseResult.rows.length > 0) {
+      const license = licenseResult.rows[0];
+      
+      // Update renewal date
+      const newRenewalDate = new Date(subscription.current_period_end * 1000);
+      
+      await db.query(
+        'UPDATE licenses SET renewal_date = $1, subscription_status = $2 WHERE id = $3',
+        [newRenewalDate, subscription.status, license.id]
+      );
 
-    console.log('✅ License deactivated for cancelled subscription:', customer.email, 'license type:', licenseConfig.type);
-
-  } catch (error) {
-    console.error('❌ Subscription cancellation processing error:', error);
-    throw error;
-  }
-}
-
-// Handle subscription updates (plan changes, upgrades, downgrades)
-async function handleSubscriptionUpdated(subscription) {
-  console.log('🔄 Subscription updated:', subscription.id);
-  
-  try {
-    const customer = await stripe.customers.retrieve(subscription.customer);
-
-    // Get the price ID to determine license type
-    const priceId = subscription.items.data[0]?.price?.id;
-    const productId = subscription.items.data[0]?.price?.product?.id;
-
-    // Determine license type based on price/product
-    const licenseConfig = getLicenseConfig(priceId, productId);
-    if (!licenseConfig) {
-      console.error('❌ Unknown subscription product for update:', { priceId, productId });
-      return;
-    }
-
-    console.log('📦 Updating subscription for license type:', licenseConfig.type);
-
-    // Update license status and renewal date
-    if (subscription.status === 'active') {
+      // Record renewal in purchase history
       await db.query(`
-        UPDATE licenses 
-        SET status = $1, subscription_status = $2, renewal_date = $3
-        WHERE customer_email = $4 AND subscription_id = $5
+        INSERT INTO purchase_history (
+          license_id, customer_email, transaction_type, new_license_type,
+          new_license_key, stripe_subscription_id, amount_paid, purchase_date,
+          renewal_date, payment_processor, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `, [
-        'active',
-        subscription.status,
-        new Date(subscription.current_period_end * 1000),
+        license.id,
         customer.email,
-        subscription.id
+        'renewal',
+        license.license_type,
+        license.license_key,
+        subscription.id,
+        invoice.amount_paid / 100,
+        new Date(),
+        newRenewalDate,
+        'stripe',
+        'Subscription renewal payment'
       ]);
 
-      console.log('✅ License updated for subscription:', customer.email, 'license type:', licenseConfig.type);
+      console.log('✅ Subscription renewal processed:', license.license_key);
     }
 
   } catch (error) {
-    console.error('❌ Subscription update processing error:', error);
-    throw error;
+    console.error('❌ Subscription payment handling error:', error);
   }
 }
 
-// Handle payment failures
-async function handlePaymentFailed(invoice) {
-  console.log('💳 Payment failed:', invoice.id);
-  
+async function handleSubscriptionUpdated(subscription) {
   try {
-    const customer = await stripe.customers.retrieve(invoice.customer);
+    console.log('🔄 Processing subscription update:', subscription.id);
 
-    // Record failed payment in purchase history
-    await db.query(`
-      INSERT INTO purchase_history (
-        customer_email, transaction_type, stripe_subscription_id,
-        purchase_date, payment_processor, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+    const licenseResult = await db.query(
+      'SELECT * FROM licenses WHERE subscription_id = $1',
+      [subscription.id]
+    );
+
+    if (licenseResult.rows.length > 0) {
+      const license = licenseResult.rows[0];
+      const newRenewalDate = new Date(subscription.current_period_end * 1000);
+
+      // Handle plan changes (upgrades/downgrades)
+      const currentPriceId = subscription.items.data[0]?.price?.id;
+      const newLicenseType = getLicenseTypeFromStripePrice(currentPriceId);
+
+      if (newLicenseType !== license.license_type) {
+        // This is a plan change
+        await db.query(`
+          UPDATE licenses SET 
+            license_type = $1, 
+            renewal_date = $2, 
+            subscription_status = $3,
+            stripe_price_id = $4
+          WHERE id = $5
+        `, [newLicenseType, newRenewalDate, subscription.status, currentPriceId, license.id]);
+
+        // Record plan change
+        await db.query(`
+          INSERT INTO purchase_history (
+            license_id, customer_email, transaction_type, old_license_type,
+            new_license_type, new_license_key, stripe_subscription_id,
+            purchase_date, renewal_date, payment_processor, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [
+          license.id,
+          license.customer_email,
+          newLicenseType > license.license_type ? 'upgrade' : 'downgrade',
+          license.license_type,
+          newLicenseType,
+          license.license_key,
+          subscription.id,
+          new Date(),
+          newRenewalDate,
+          'stripe',
+          `Plan changed from ${license.license_type} to ${newLicenseType}`
+        ]);
+      } else {
+        // Just update renewal date and status
+        await db.query(
+          'UPDATE licenses SET renewal_date = $1, subscription_status = $2 WHERE id = $3',
+          [newRenewalDate, subscription.status, license.id]
+        );
+      }
+
+      console.log('✅ Subscription update processed:', license.license_key);
+    }
+
+  } catch (error) {
+    console.error('❌ Subscription update handling error:', error);
+  }
+}
+
+async function handleSubscriptionCancelled(subscription) {
+  try {
+    console.log('❌ Processing subscription cancellation:', subscription.id);
+
+    const licenseResult = await db.query(
+      'SELECT * FROM licenses WHERE subscription_id = $1',
+      [subscription.id]
+    );
+
+    if (licenseResult.rows.length > 0) {
+      const license = licenseResult.rows[0];
+
+      await db.query(
+        'UPDATE licenses SET subscription_status = $1 WHERE id = $2',
+        ['cancelled', license.id]
+      );
+
+      // Record cancellation
+      await db.query(`
+        INSERT INTO purchase_history (
+          license_id, customer_email, transaction_type, new_license_type,
+          new_license_key, stripe_subscription_id, purchase_date,
+          payment_processor, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [
+        license.id,
+        license.customer_email,
+        'cancellation',
+        license.license_type,
+        license.license_key,
+        subscription.id,
+        new Date(),
+        'stripe',
+        'Subscription cancelled'
+      ]);
+
+      console.log('✅ Subscription cancellation processed:', license.license_key);
+    }
+
+  } catch (error) {
+    console.error('❌ Subscription cancellation handling error:', error);
+  }
+}
+
+async function handlePaymentSucceeded(paymentIntent) {
+  console.log('💰 Payment succeeded:', paymentIntent.id);
+  // Additional processing if needed
+}
+
+async function handlePaymentFailed(invoice) {
+  console.log('💥 Payment failed:', invoice.id);
+  // Handle failed payment (notify customer, etc.)
+}
+
+// ============================================================================
+// PAYPAL WEBHOOK HANDLERS
+// ============================================================================
+
+async function handlePayPalPayment(payment) {
+  try {
+    console.log('💰 Processing PayPal payment:', payment.id);
+
+    // Extract customer info from PayPal payment
+    const customerEmail = payment.payer?.payer_info?.email;
+    const customerName = payment.payer?.payer_info?.first_name + ' ' + payment.payer?.payer_info?.last_name;
+    const amount = parseFloat(payment.amount?.total);
+
+    // Determine license type from PayPal custom field or amount
+    const licenseType = getLicenseTypeFromPayPalAmount(amount);
+    const siteLimit = getSiteLimitFromLicenseType(licenseType);
+
+    // Calculate renewal date
+    let renewalDate = null;
+    if (licenseType.includes('annual')) {
+      renewalDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    }
+
+    const licenseKey = generateLicenseKey();
+
+    // Insert license
+    const licenseResult = await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name,
+        purchase_date, renewal_date, paypal_transaction_id, amount_paid,
+        payment_processor, purchase_source, site_limit, kill_switch_enabled,
+        resale_monitoring, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+      RETURNING id
     `, [
-      customer.email,
-      'payment_failed',
-      invoice.subscription,
-      new Date(),
-      'stripe',
-      'Payment failed for invoice: ' + invoice.id
+      licenseKey, licenseType, 'active', customerEmail, customerName,
+      new Date(), renewalDate, payment.id, amount, 'paypal',
+      'paypal_payment', siteLimit, true, true
     ]);
 
-    console.log('⚠️ Payment failure recorded for:', customer.email);
+    // Record purchase history
+    await db.query(`
+      INSERT INTO purchase_history (
+        license_id, customer_email, transaction_type, new_license_type,
+        new_license_key, paypal_transaction_id, amount_paid, purchase_date,
+        renewal_date, payment_processor, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [
+      licenseResult.rows[0].id, customerEmail, 'purchase', licenseType,
+      licenseKey, payment.id, amount, new Date(), renewalDate, 'paypal',
+      'PayPal payment processed'
+    ]);
+
+    // Send to Pabbly/AWeber
+    await sendToPabbly(customerEmail, licenseKey, licenseType, {
+      customer_name: customerName,
+      purchase_amount: amount.toString(),
+      currency: payment.amount?.currency || 'USD',
+      payment_processor: 'paypal',
+      renewal_date: renewalDate
+    });
+
+    console.log('✅ PayPal purchase processed:', licenseKey);
 
   } catch (error) {
-    console.error('❌ Payment failure processing error:', error);
-    throw error;
+    console.error('❌ PayPal payment handling error:', error);
   }
 }
 
-// Get license configuration based on Stripe price/product ID
-function getLicenseConfig(priceId, productId) {
-  // Configure your Stripe price IDs here
-  const priceConfigs = {
-    // $35/month Professional (5 sites)
-    'price_professional_monthly': {
-      type: 'professional',
-      prefix: 'PRO',
-      siteLimit: 5
-    },
-    // $297 Lifetime Unlimited
-    'price_lifetime_unlimited': {
-      type: 'lifetime_unlimited',
-      prefix: 'LIFE',
-      siteLimit: -1
-    },
-    // $197/year Annual Unlimited (NEW PRODUCT)
-    'price_annual_unlimited': {
-      type: 'annual_unlimited',
-      prefix: 'ANN',
-      siteLimit: -1
-    }
-  };
-
-  // Try to match by price ID first, then by product ID patterns
-  if (priceConfigs[priceId]) {
-    return priceConfigs[priceId];
-  }
-
-  // Fallback: try to determine by product ID patterns
-  if (productId && productId.includes('professional') || productId.includes('5site')) {
-    return priceConfigs['price_professional_monthly'];
-  } else if (productId && productId.includes('lifetime') || productId.includes('297')) {
-    return priceConfigs['price_lifetime_unlimited'];
-  } else if (productId && productId.includes('annual') || productId.includes('197')) {
-    return priceConfigs['price_annual_unlimited'];
-  }
-
-  console.error('❌ No license config found for:', { priceId, productId });
-  return null;
+async function handlePayPalSubscriptionCreated(subscription) {
+  console.log('🔄 PayPal subscription created:', subscription.id);
+  // Handle PayPal subscription creation
 }
 
-// Helper function to get site limit based on license plan
-function getSiteLimit(license) {
-  // Check if site_limit is explicitly set
-  if (license.site_limit !== null && license.site_limit !== undefined) {
-    return parseInt(license.site_limit);
-  }
-  
-  // Default limits based on license type
-  const limits = {
-    '5sites': 5,
-    'professional': 5,
-    'trial': 5,
-    'annual_unlimited': -1,
-    'lifetime_unlimited': -1
-  };
-  
-  return limits[license.license_type] || 5;
+async function handlePayPalSubscriptionCancelled(subscription) {
+  console.log('❌ PayPal subscription cancelled:', subscription.id);
+  // Handle PayPal subscription cancellation
 }
 
-// Initialize database tables
-async function initializeDatabase() {
+async function handlePayPalPaymentFailed(payment) {
+  console.log('💥 PayPal payment failed:', payment.id);
+  // Handle PayPal payment failure
+}
+
+// ============================================================================
+// WARRIORPLUS IPN HANDLERS
+// ============================================================================
+
+async function handleWarriorPlusSale(ipnData) {
   try {
-    console.log('🗄️ Initializing database tables...');
-    
-    // Create licenses table with enhanced schema
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS licenses (
-        id SERIAL PRIMARY KEY,
-        license_key VARCHAR(255) UNIQUE NOT NULL,
-        license_type VARCHAR(50) NOT NULL,
-        status VARCHAR(50) NOT NULL,
-        customer_email VARCHAR(255),
-        customer_name VARCHAR(255),
-        purchase_date TIMESTAMP,
-        renewal_date TIMESTAMP,
-        trial_end_date TIMESTAMP,
-        subscription_id VARCHAR(255),
-        subscription_status VARCHAR(50),
-        stripe_price_id VARCHAR(255),
-        amount_paid DECIMAL(10,2),
-        payment_processor VARCHAR(50) DEFAULT 'stripe',
-        purchase_source VARCHAR(100),
-        site_limit INTEGER DEFAULT 5,
-        kill_switch_enabled BOOLEAN DEFAULT true,
-        resale_monitoring BOOLEAN DEFAULT true,
-        is_upgrade BOOLEAN DEFAULT false,
-        previous_license_id INTEGER,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        last_seen TIMESTAMP DEFAULT NOW()
-      )
-    `);
+    console.log('⚔️ Processing WarriorPlus sale:', ipnData.transaction_id);
 
-    // Create site_usage table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS site_usage (
-        id SERIAL PRIMARY KEY,
-        license_key VARCHAR(255) NOT NULL,
-        site_signature VARCHAR(255) NOT NULL,
-        site_domain VARCHAR(255) NOT NULL,
-        site_url TEXT NOT NULL,
-        site_data JSONB,
-        status VARCHAR(50) DEFAULT 'active',
-        registered_at TIMESTAMP DEFAULT NOW(),
-        last_seen TIMESTAMP DEFAULT NOW(),
-        deactivated_at TIMESTAMP NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(license_key, site_signature)
-      )
-    `);
+    const customerEmail = ipnData.buyer_email;
+    const customerName = ipnData.buyer_name;
+    const amount = parseFloat(ipnData.amount);
+    const productId = ipnData.product_id;
 
-    // Create purchase_history table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS purchase_history (
-        id SERIAL PRIMARY KEY,
-        license_id INTEGER REFERENCES licenses(id),
-        customer_email VARCHAR(255) NOT NULL,
-        transaction_type VARCHAR(50),
-        old_license_type VARCHAR(50),
-        new_license_type VARCHAR(50),
-        old_license_key VARCHAR(255),
-        new_license_key VARCHAR(255),
-        stripe_session_id VARCHAR(255),
-        stripe_subscription_id VARCHAR(255),
-        stripe_price_id VARCHAR(255),
-        amount_paid DECIMAL(10,2),
-        purchase_date TIMESTAMP DEFAULT NOW(),
-        renewal_date TIMESTAMP,
-        payment_processor VARCHAR(50),
-        sites_migrated INTEGER DEFAULT 0,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
+    // Determine license type from WarriorPlus product ID
+    const licenseType = getLicenseTypeFromWarriorPlusProduct(productId);
+    const siteLimit = getSiteLimitFromLicenseType(licenseType);
 
-    // Create email_collection table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS email_collection (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) NOT NULL,
-        license_key VARCHAR(255),
-        collection_source VARCHAR(100),
-        license_type VARCHAR(50),
-        customer_name VARCHAR(255),
-        website_url TEXT,
-        sent_to_autoresponder BOOLEAN DEFAULT false,
-        collected_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
+    // Calculate renewal date
+    let renewalDate = null;
+    if (licenseType.includes('annual')) {
+      renewalDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    }
 
-    console.log('✅ Database tables initialized successfully');
+    const licenseKey = generateLicenseKey();
+
+    // Insert license
+    const licenseResult = await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name,
+        purchase_date, renewal_date, warriorplus_transaction_id, 
+        warriorplus_product_id, affiliate_id, affiliate_commission,
+        amount_paid, payment_processor, purchase_source, site_limit,
+        kill_switch_enabled, resale_monitoring, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+      RETURNING id
+    `, [
+      licenseKey, licenseType, 'active', customerEmail, customerName,
+      new Date(), renewalDate, ipnData.transaction_id, productId,
+      ipnData.affiliate_id || null, ipnData.affiliate_commission || null,
+      amount, 'warriorplus', 'warriorplus_sale', siteLimit, true, true
+    ]);
+
+    // Record purchase history
+    await db.query(`
+      INSERT INTO purchase_history (
+        license_id, customer_email, transaction_type, new_license_type,
+        new_license_key, warriorplus_transaction_id, warriorplus_product_id,
+        amount_paid, purchase_date, renewal_date, payment_processor, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `, [
+      licenseResult.rows[0].id, customerEmail, 'purchase', licenseType,
+      licenseKey, ipnData.transaction_id, productId, amount, new Date(),
+      renewalDate, 'warriorplus', 'WarriorPlus sale processed'
+    ]);
+
+    // Send to Pabbly/AWeber
+    await sendToPabbly(customerEmail, licenseKey, licenseType, {
+      customer_name: customerName,
+      purchase_amount: amount.toString(),
+      currency: 'USD',
+      payment_processor: 'warriorplus',
+      renewal_date: renewalDate,
+      affiliate_id: ipnData.affiliate_id
+    });
+
+    console.log('✅ WarriorPlus sale processed:', licenseKey);
+
   } catch (error) {
-    console.error('❌ Database initialization error:', error);
+    console.error('❌ WarriorPlus sale handling error:', error);
   }
 }
 
-// License validation endpoint with kill switch
+async function handleWarriorPlusRefund(ipnData) {
+  try {
+    console.log('💸 Processing WarriorPlus refund:', ipnData.transaction_id);
+
+    // Find license by transaction ID
+    const licenseResult = await db.query(
+      'SELECT * FROM licenses WHERE warriorplus_transaction_id = $1',
+      [ipnData.original_transaction_id || ipnData.transaction_id]
+    );
+
+    if (licenseResult.rows.length > 0) {
+      const license = licenseResult.rows[0];
+
+      // Deactivate license
+      await db.query(
+        'UPDATE licenses SET status = $1, kill_switch_enabled = $2 WHERE id = $3',
+        ['refunded', true, license.id]
+      );
+
+      // Record refund
+      await db.query(`
+        INSERT INTO purchase_history (
+          license_id, customer_email, transaction_type, new_license_type,
+          new_license_key, warriorplus_transaction_id, amount_paid,
+          purchase_date, payment_processor, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [
+        license.id, license.customer_email, 'refund', license.license_type,
+        license.license_key, ipnData.transaction_id, 
+        -parseFloat(ipnData.amount || 0), new Date(), 'warriorplus',
+        'WarriorPlus refund processed'
+      ]);
+
+      console.log('✅ WarriorPlus refund processed:', license.license_key);
+    }
+
+  } catch (error) {
+    console.error('❌ WarriorPlus refund handling error:', error);
+  }
+}
+
+async function handleWarriorPlusRebill(ipnData) {
+  console.log('🔄 WarriorPlus rebill:', ipnData.transaction_id);
+  // Handle recurring billing
+}
+
+async function handleWarriorPlusCancel(ipnData) {
+  console.log('❌ WarriorPlus cancellation:', ipnData.transaction_id);
+  // Handle subscription cancellation
+}
+
+// ============================================================================
+// LICENSE VALIDATION AND MANAGEMENT
+// ============================================================================
+
+// License validation endpoint
 router.post('/validate-license', async (req, res) => {
   try {
-    const { licenseKey, siteUrl, pluginVersion, action = 'check' } = req.body;
-    
+    const { licenseKey, siteUrl, siteData } = req.body;
+
     if (!licenseKey) {
       return res.json({
         success: false,
         message: 'License key is required'
       });
     }
-
-    console.log('🔍 Validating license:', licenseKey, 'for site:', siteUrl);
 
     // Get license from database
     const licenseResult = await db.query(
@@ -571,68 +637,40 @@ router.post('/validate-license', async (req, res) => {
     }
 
     const license = licenseResult.rows[0];
-    console.log('📋 License found:', license.license_type, license.status);
 
-    // KILL SWITCH CHECK
-    if (!license.kill_switch_enabled) {
+    // Check kill switch
+    if (license.kill_switch_enabled === false) {
       return res.json({
         success: false,
-        message: 'This license has been disabled. Please contact support.'
+        message: 'License has been disabled. Please contact support.'
       });
     }
-    
+
     // Check license status
-    if (license.status === 'cancelled' || license.status === 'expired') {
+    if (license.status !== 'active' && license.status !== 'trial') {
       return res.json({
         success: false,
-        message: `License is ${license.status}`
+        message: `License is ${license.status}. Please contact support.`
       });
     }
 
-    // Check license expiration (for trial and annual subscriptions)
-    if (license.trial_end_date) {
+    // Check expiration for trials
+    if (license.license_type === 'trial' && license.trial_end_date) {
       const now = new Date();
-      const expires = new Date(license.trial_end_date);
-      
-      if (now > expires) {
-        await db.query(
-          'UPDATE licenses SET status = $1 WHERE license_key = $2',
-          ['expired', licenseKey]
-        );
-        
-        if (license.license_type === 'trial') {
-          return res.json({
-            success: false,
-            message: 'Trial license has expired'
-          });
-        }
-      }
-    }
-
-    // Check annual subscription renewal
-    if (license.renewal_date && license.license_type === 'annual_unlimited') {
-      const now = new Date();
-      const renewalDate = new Date(license.renewal_date);
-      
-      if (now > renewalDate) {
-        await db.query(
-          'UPDATE licenses SET status = $1 WHERE license_key = $2',
-          ['expired', licenseKey]
-        );
-        
+      const trialEnd = new Date(license.trial_end_date);
+      if (now > trialEnd) {
         return res.json({
           success: false,
-          message: 'Annual subscription has expired. Please renew to continue using SiteOverlay Pro.'
+          message: 'Trial period has expired. Please purchase a license.'
         });
       }
     }
 
-    // Get site limit for this license
-    const siteLimit = getSiteLimit(license);
-    console.log('🏠 Site limit for license:', siteLimit);
+    // Check site limit and register site if provided
+    let currentUsage = 0;
+    const siteLimit = getSiteLimitFromLicenseType(license.license_type);
 
-    // If we have a site URL, handle site registration/checking
-    if (siteUrl && action === 'check') {
+    if (siteUrl) {
       // Generate site signature
       const siteSignature = generateSiteSignature({
         site_domain: new URL(siteUrl).hostname,
@@ -640,30 +678,29 @@ router.post('/validate-license', async (req, res) => {
         abspath: siteUrl
       });
 
-      // Check if site is already registered
-      const siteResult = await db.query(
+      // Check if site already registered
+      const existingSite = await db.query(
         'SELECT * FROM site_usage WHERE license_key = $1 AND site_signature = $2',
         [licenseKey, siteSignature]
       );
-      
-      if (siteResult.rows.length === 0 && siteLimit > 0) {
-        // Site not registered, check if we're under the limit
+
+      if (existingSite.rows.length === 0) {
+        // New site - check if we can register it
         const usageResult = await db.query(
           'SELECT COUNT(*) as count FROM site_usage WHERE license_key = $1 AND status = $2',
           [licenseKey, 'active']
         );
-        
-        const currentUsage = parseInt(usageResult.rows[0].count);
-        console.log('📊 Current site usage:', currentUsage, '/', siteLimit);
-        
-        if (currentUsage >= siteLimit) {
+
+        currentUsage = parseInt(usageResult.rows[0].count);
+
+        if (siteLimit > 0 && currentUsage >= siteLimit) {
           return res.json({
             success: false,
-            message: `Site limit exceeded. This license allows ${siteLimit} sites, but ${currentUsage} are already registered. To install on this site: Uninstall SiteOverlay Pro from an existing site to free up an installation slot, then try activating again.`
+            message: `Site limit exceeded. This license allows ${siteLimit} sites. To install on this site: Uninstall SiteOverlay Pro from an existing site to free up an installation slot, then try activating again.`
           });
         }
-        
-        // Register the new site
+
+        // Register new site
         await db.query(`
           INSERT INTO site_usage (
             license_key, site_signature, site_domain, site_url, site_data, status
@@ -673,36 +710,34 @@ router.post('/validate-license', async (req, res) => {
           siteSignature,
           new URL(siteUrl).hostname,
           siteUrl,
-          JSON.stringify({ plugin_version: pluginVersion }),
+          JSON.stringify(siteData || {}),
           'active'
         ]);
-        
-        console.log('✅ New site registered:', siteUrl);
-      } else if (siteResult.rows.length > 0) {
-        // Update last seen for existing site
+
+        currentUsage++;
+      } else {
+        // Update existing site
         await db.query(
-          'UPDATE site_usage SET last_seen = NOW() WHERE license_key = $1 AND site_signature = $2',
-          [licenseKey, siteSignature]
+          'UPDATE site_usage SET last_seen = NOW(), site_data = $1 WHERE license_key = $2 AND site_signature = $3',
+          [JSON.stringify(siteData || {}), licenseKey, siteSignature]
         );
+
+        // Get current usage
+        const usageResult = await db.query(
+          'SELECT COUNT(*) as count FROM site_usage WHERE license_key = $1 AND status = $2',
+          [licenseKey, 'active']
+        );
+        currentUsage = parseInt(usageResult.rows[0].count);
       }
+
+      // Update license last seen
+      await db.query(
+        'UPDATE licenses SET last_seen = NOW() WHERE license_key = $1',
+        [licenseKey]
+      );
     }
 
-    // Get current usage for response
-    const usageResult = await db.query(
-      'SELECT * FROM site_usage WHERE license_key = $1',
-      [licenseKey]
-    );
-    
-    const activeSites = usageResult.rows.filter(site => site.status === 'active');
-    const currentUsage = activeSites.length;
-
-    // Update license last seen
-    await db.query(
-      'UPDATE licenses SET last_seen = NOW() WHERE license_key = $1',
-      [licenseKey]
-    );
-
-    // Return enhanced license data
+    // Return success response
     res.json({
       success: true,
       message: 'License validated successfully',
@@ -715,7 +750,7 @@ router.post('/validate-license', async (req, res) => {
         licensed_to: license.customer_name,
         purchase_date: license.purchase_date,
         renewal_date: license.renewal_date || license.annual_expires || 'Never',
-        expires: license.renewal_date || license.annual_expires || 'Never',
+        expires: license.renewal_date || license.annual_expires || license.trial_end_date || 'Never',
         site_limit: siteLimit,
         sites_used: currentUsage,
         sites_remaining: siteLimit > 0 ? Math.max(0, siteLimit - currentUsage) : 'Unlimited',
@@ -732,16 +767,15 @@ router.post('/validate-license', async (req, res) => {
     console.error('❌ License validation error:', error);
     res.json({
       success: false,
-      message: 'Validation failed - please contact support'
+      message: 'License validation failed'
     });
   }
 });
 
-// Start trial endpoint with enhanced database integration
+// Start trial endpoint
 router.post('/start-trial', async (req, res) => {
   try {
-    const { siteUrl, pluginVersion, productCode } = req.body;
-    const { full_name, email } = req.body;
+    const { siteUrl, pluginVersion, productCode, full_name, email } = req.body;
 
     if (!email || !full_name) {
       return res.json({
@@ -777,99 +811,50 @@ router.post('/start-trial', async (req, res) => {
     const trialExpires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
 
     console.log('💾 Inserting trial license into database...');
-    try {
-      const licenseResult = await db.query(`
-        INSERT INTO licenses (
-          license_key, license_type, status, customer_email, customer_name,
-          purchase_date, trial_end_date, subscription_id, subscription_status,
-          stripe_price_id, amount_paid, payment_processor, purchase_source, 
-          site_limit, kill_switch_enabled, resale_monitoring, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
-        RETURNING id
-      `, [
-        trialLicenseKey, 
-        'trial', 
-        'trial', 
-        email,
-        full_name,
-        new Date(),              // purchase_date
-        trialExpires,           // trial_end_date
-        null,                   // subscription_id
-        null,                   // subscription_status
-        null,                   // stripe_price_id
-        0,                      // amount_paid (trials are free)
-        'trial',                // payment_processor
-        'email_trial_request',  // purchase_source
-        5,                      // Trial gets 5 sites
-        true,
-        true
-      ]);
+    
+    const licenseResult = await db.query(`
+      INSERT INTO licenses (
+        license_key, license_type, status, customer_email, customer_name,
+        purchase_date, trial_end_date, subscription_id, subscription_status,
+        stripe_price_id, amount_paid, payment_processor, purchase_source, 
+        site_limit, kill_switch_enabled, resale_monitoring, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+      RETURNING id
+    `, [
+      trialLicenseKey, 'trial', 'trial', email, full_name,
+      new Date(), trialExpires, null, null, null, 0, 'trial',
+      'email_trial_request', 5, true, true
+    ]);
 
-      // Record trial in purchase history
-      await db.query(`
-        INSERT INTO purchase_history (
-          license_id, customer_email, transaction_type, new_license_type,
-          new_license_key, amount_paid, purchase_date, payment_processor, notes
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      `, [
-        licenseResult.rows[0].id,
-        email,
-        'trial',
-        'trial',
-        trialLicenseKey,
-        0,
-        new Date(),
-        'trial',
-        'Free trial request'
-      ]);
-
-      console.log('✅ License inserted successfully');
-    } catch (dbError) {
-      console.error('❌ Database insert error (licenses):', dbError);
-      return res.json({
-        success: false,
-        message: 'Database error creating trial license'
-      });
-    }
+    // Record trial in purchase history
+    await db.query(`
+      INSERT INTO purchase_history (
+        license_id, customer_email, transaction_type, new_license_type,
+        new_license_key, amount_paid, purchase_date, payment_processor, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      licenseResult.rows[0].id, email, 'trial', 'trial', trialLicenseKey,
+      0, new Date(), 'trial', 'Free trial request'
+    ]);
 
     // Send to Pabbly Connect
-    console.log('🔗 Attempting Pabbly webhook...');
-    let pabblySuccess = false;
-    try {
-      pabblySuccess = await sendToPabbly(email, trialLicenseKey, 'trial', {
-        customer_name: full_name,
-        website_url: siteUrl,
-        trial_expires: trialExpires.toISOString(),
-        site_limit: 5
-      });
-      
-      console.log('📨 Pabbly webhook result:', pabblySuccess);
-    } catch (pabblyError) {
-      console.error('❌ Pabbly webhook error:', pabblyError);
-      // Continue despite Pabbly error
-      console.log('⚠️ Continuing despite Pabbly error...');
-    }
+    const pabblySuccess = await sendToPabbly(email, trialLicenseKey, 'trial', {
+      customer_name: full_name,
+      website_url: siteUrl,
+      trial_expires: trialExpires.toISOString(),
+      site_limit: 5
+    });
 
     // Store in email collection table
-    try {
-      await db.query(`
-        INSERT INTO email_collection (
-          email, license_key, collection_source, license_type, customer_name,
-          website_url, sent_to_autoresponder, collected_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-      `, [
-        email, 
-        trialLicenseKey, 
-        'trial_request', 
-        'trial', 
-        full_name,
-        siteUrl || '',
-        pabblySuccess ? 'sent' : 'pending'
-      ]);
-    } catch (emailError) {
-      console.error('❌ Email collection error:', emailError);
-      // Continue despite error
-    }
+    await db.query(`
+      INSERT INTO email_collection (
+        email, license_key, collection_source, license_type, customer_name,
+        website_url, sent_to_autoresponder, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    `, [
+      email, trialLicenseKey, 'trial_request', 'trial', full_name,
+      siteUrl || '', pabblySuccess ? 'sent' : 'pending'
+    ]);
 
     res.json({
       success: true,
@@ -904,14 +889,12 @@ router.post('/unregister-site', async (req, res) => {
       });
     }
 
-    // Generate site signature
     const siteSignature = generateSiteSignature({
       site_domain: new URL(siteUrl).hostname,
       site_path: new URL(siteUrl).pathname,
       abspath: siteUrl
     });
 
-    // Deactivate site
     await db.query(
       'UPDATE site_usage SET status = $1, deactivated_at = NOW() WHERE license_key = $2 AND site_signature = $3',
       ['deactivated', licenseKey, siteSignature]
@@ -927,69 +910,6 @@ router.post('/unregister-site', async (req, res) => {
     res.json({
       success: false,
       message: 'Failed to unregister site'
-    });
-  }
-});
-
-// Get license usage statistics
-router.post('/license-usage', async (req, res) => {
-  try {
-    const { licenseKey } = req.body;
-
-    if (!licenseKey) {
-      return res.json({
-        success: false,
-        message: 'License key is required'
-      });
-    }
-
-    // Get license details
-    const licenseResult = await db.query(
-      'SELECT * FROM licenses WHERE license_key = $1',
-      [licenseKey]
-    );
-
-    if (licenseResult.rows.length === 0) {
-      return res.json({
-        success: false,
-        message: 'License not found'
-      });
-    }
-
-    const license = licenseResult.rows[0];
-    const siteLimit = getSiteLimit(license);
-
-    // Get site usage
-    const usageResult = await db.query(
-      'SELECT * FROM site_usage WHERE license_key = $1 ORDER BY registered_at DESC',
-      [licenseKey]
-    );
-
-    const activeSites = usageResult.rows.filter(site => site.status === 'active');
-
-    res.json({
-      success: true,
-      data: {
-        license_key: licenseKey,
-        license_type: license.license_type,
-        site_limit: siteLimit,
-        sites_used: activeSites.length,
-        sites_remaining: siteLimit > 0 ? Math.max(0, siteLimit - activeSites.length) : 'Unlimited',
-        sites: usageResult.rows.map(site => ({
-          domain: site.site_domain,
-          url: site.site_url,
-          status: site.status,
-          registered_at: site.registered_at,
-          last_seen: site.last_seen
-        }))
-      }
-    });
-
-  } catch (error) {
-    console.error('License usage error:', error);
-    res.json({
-      success: false,
-      message: 'Failed to get license usage'
     });
   }
 });
@@ -1037,10 +957,7 @@ router.post('/newsletter-signup', async (req, res) => {
         sent_to_autoresponder, collected_at
       ) VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
-      email, 
-      licenseKey, 
-      'newsletter', 
-      'newsletter',
+      email, licenseKey, 'newsletter', 'newsletter',
       pabblySuccess ? 'sent' : 'pending'
     ]);
 
@@ -1058,12 +975,15 @@ router.post('/newsletter-signup', async (req, res) => {
   }
 });
 
-// Admin endpoint to update license (for testing/management)
+// ============================================================================
+// ADMIN ENDPOINTS
+// ============================================================================
+
+// Admin endpoint to update license
 router.post('/admin/update-license', async (req, res) => {
   try {
     const { license_key, admin_key, ...updates } = req.body;
 
-    // Simple admin authentication (replace with proper auth)
     if (admin_key !== process.env.ADMIN_API_KEY) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -1090,7 +1010,7 @@ router.post('/admin/update-license', async (req, res) => {
       return res.json({ success: false, message: 'No valid fields to update' });
     }
 
-    values.push(license_key); // Add license_key as last parameter
+    values.push(license_key);
     
     await db.query(
       `UPDATE licenses SET ${updateFields.join(', ')} WHERE license_key = $${paramIndex}`,
@@ -1110,7 +1030,6 @@ router.post('/admin/toggle-kill-switch', async (req, res) => {
   try {
     const { license_key, enabled, admin_key } = req.body;
     
-    // Verify admin access
     if (admin_key !== process.env.ADMIN_API_KEY) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -1130,7 +1049,11 @@ router.post('/admin/toggle-kill-switch', async (req, res) => {
   }
 });
 
-// Pabbly Connect integration function with enhanced AWeber data
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// Pabbly Connect integration with enhanced AWeber data
 async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
   try {
     // Get current site usage for AWeber fields
@@ -1175,7 +1098,7 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       installs_remaining: sitesRemaining,
       sites_active: sitesActive.toString(),
       next_renewal: metadata.renewal_date ? 
-        (typeof metadata.renewal_date === 'string' ? metadata.renewal_date.split('T')[0] : metadata.renewal_date.toISOString().split('T')[0]) : 
+        (typeof metadata.renewal_date === 'string' ? metadata.renewal_date.split('T')[0] : metadata.renewal_date.toISOString().split('T')[0]) :
         (licenseType === 'lifetime_unlimited' ? 'Never' : 'Unknown'),
       
       // Customer context
@@ -1197,7 +1120,8 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       aweber_tags: [
         'SiteOverlay Pro',
         licenseType === 'trial' ? 'Trial User' : 'Paying Customer',
-        licenseType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+        licenseType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        metadata.payment_processor ? metadata.payment_processor.toUpperCase() : 'STRIPE'
       ].join(','),
       
       // Email template variables
@@ -1220,20 +1144,19 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       });
 
       if (response.ok) {
-        console.log('✅ Pabbly Connect successful for:', email);
+        console.log('✅ Pabbly webhook sent successfully');
         return true;
       } else {
-        const errorText = await response.text();
-        console.error('❌ Pabbly webhook failed:', response.status, errorText);
+        console.error('❌ Pabbly webhook failed:', response.status, response.statusText);
         return false;
       }
     } else {
-      console.log('⚠️  No Pabbly webhook URL configured - data stored locally only');
-      return true; // System works without Pabbly initially
+      console.log('⚠️ No Pabbly webhook URL configured');
+      return false;
     }
 
   } catch (error) {
-    console.error('❌ Pabbly integration error:', error);
+    console.error('❌ Pabbly webhook error:', error);
     return false;
   }
 }
@@ -1247,6 +1170,159 @@ function generateLicenseKey() {
 function generateSiteSignature(siteData) {
   const signatureData = `${siteData.site_domain}${siteData.site_path}${siteData.abspath}`;
   return crypto.createHash('md5').update(signatureData).digest('hex');
+}
+
+// Get license type from Stripe price ID
+function getLicenseTypeFromStripePrice(priceId) {
+  const priceMapping = {
+    'price_1234567890': '5_site_license',
+    'price_0987654321': 'annual_unlimited',
+    'price_1111111111': 'lifetime_unlimited'
+  };
+  return priceMapping[priceId] || '5_site_license';
+}
+
+// Get license type from PayPal amount
+function getLicenseTypeFromPayPalAmount(amount) {
+  if (amount >= 297) return 'lifetime_unlimited';
+  if (amount >= 97) return 'annual_unlimited';
+  return '5_site_license';
+}
+
+// Get license type from WarriorPlus product ID
+function getLicenseTypeFromWarriorPlusProduct(productId) {
+  const productMapping = {
+    'WP001': '5_site_license',
+    'WP002': 'annual_unlimited',
+    'WP003': 'lifetime_unlimited'
+  };
+  return productMapping[productId] || '5_site_license';
+}
+
+// Get site limit from license type
+function getSiteLimitFromLicenseType(licenseType) {
+  switch (licenseType) {
+    case 'trial':
+    case '5_site_license':
+      return 5;
+    case 'annual_unlimited':
+    case 'lifetime_unlimited':
+      return -1; // Unlimited
+    default:
+      return 5;
+  }
+}
+
+// Initialize database (run on startup)
+async function initializeDatabase() {
+  try {
+    console.log('🗄️ Initializing database schema...');
+
+    // Create licenses table with all fields
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS licenses (
+        id SERIAL PRIMARY KEY,
+        license_key VARCHAR(255) UNIQUE NOT NULL,
+        license_type VARCHAR(50) NOT NULL,
+        status VARCHAR(50) DEFAULT 'active',
+        customer_email VARCHAR(255),
+        customer_name VARCHAR(255),
+        purchase_date TIMESTAMP,
+        renewal_date TIMESTAMP,
+        trial_end_date TIMESTAMP,
+        subscription_id VARCHAR(255),
+        subscription_status VARCHAR(50),
+        stripe_price_id VARCHAR(255),
+        paypal_transaction_id VARCHAR(255),
+        paypal_subscription_id VARCHAR(255),
+        warriorplus_transaction_id VARCHAR(255),
+        warriorplus_product_id VARCHAR(255),
+        affiliate_id VARCHAR(255),
+        affiliate_commission DECIMAL(10,2),
+        amount_paid DECIMAL(10,2),
+        payment_processor VARCHAR(50) DEFAULT 'stripe',
+        purchase_source VARCHAR(100),
+        site_limit INTEGER DEFAULT 5,
+        kill_switch_enabled BOOLEAN DEFAULT true,
+        resale_monitoring BOOLEAN DEFAULT true,
+        verification_required BOOLEAN DEFAULT false,
+        last_seen TIMESTAMP,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Create site_usage table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS site_usage (
+        id SERIAL PRIMARY KEY,
+        license_key VARCHAR(255) NOT NULL,
+        site_signature VARCHAR(255) NOT NULL,
+        site_domain VARCHAR(255),
+        site_url TEXT,
+        site_data JSONB,
+        status VARCHAR(50) DEFAULT 'active',
+        registered_at TIMESTAMP DEFAULT NOW(),
+        last_seen TIMESTAMP DEFAULT NOW(),
+        deactivated_at TIMESTAMP,
+        UNIQUE(license_key, site_signature)
+      )
+    `);
+
+    // Create purchase_history table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS purchase_history (
+        id SERIAL PRIMARY KEY,
+        license_id INTEGER REFERENCES licenses(id),
+        customer_email VARCHAR(255) NOT NULL,
+        transaction_type VARCHAR(50),
+        old_license_type VARCHAR(50),
+        new_license_type VARCHAR(50),
+        old_license_key VARCHAR(255),
+        new_license_key VARCHAR(255),
+        stripe_session_id VARCHAR(255),
+        stripe_subscription_id VARCHAR(255),
+        stripe_price_id VARCHAR(255),
+        paypal_transaction_id VARCHAR(255),
+        paypal_subscription_id VARCHAR(255),
+        warriorplus_transaction_id VARCHAR(255),
+        warriorplus_product_id VARCHAR(255),
+        amount_paid DECIMAL(10,2),
+        purchase_date TIMESTAMP DEFAULT NOW(),
+        renewal_date TIMESTAMP,
+        sites_migrated INTEGER DEFAULT 0,
+        payment_processor VARCHAR(50),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Create email_collection table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS email_collection (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        license_key VARCHAR(255),
+        collection_source VARCHAR(100),
+        license_type VARCHAR(50),
+        customer_name VARCHAR(255),
+        website_url TEXT,
+        sent_to_autoresponder VARCHAR(50) DEFAULT 'pending',
+        collected_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Create indexes for performance
+    await db.query('CREATE INDEX IF NOT EXISTS idx_licenses_license_key ON licenses(license_key)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_licenses_customer_email ON licenses(customer_email)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_site_usage_license_key ON site_usage(license_key)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_purchase_history_license_id ON purchase_history(license_id)');
+
+    console.log('✅ Database schema initialized successfully');
+
+  } catch (error) {
+    console.error('❌ Database initialization error:', error);
+  }
 }
 
 // Initialize database on startup
