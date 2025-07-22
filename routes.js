@@ -175,130 +175,52 @@ async function handleCheckoutCompleted(session, isTestMode = false) {
     // Handle subscription-based purchases
     if (session.subscription) {
       const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      const renewalDate = new Date(subscription.current_period_end * 1000);
+      const priceId = subscription.items.data[0].price.id;
+      const licenseConfig = getLicenseConfig(priceId);
+      const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
+      const customerEmail = customer.email;
+      const customerName = customer.name || session.customer_details?.name || 'Customer';
+      const siteLimit = licenseConfig.siteLimit;
       
-      // Extract customer info
-      const customerData = {
-        email: customer.email,
-        name: customer.name || session.customer_details?.name || 'Customer',
-        stripeCustomerId: customer.id,
-        subscriptionId: session.subscription,
-        priceId: subscription.items.data[0].price.id,
-        planType: getPlanTypeFromPriceId(subscription.items.data[0].price.id),
-        status: 'active',
-        isTestMode: isTestMode,
-        environment: isTestMode ? 'test' : 'live',
-        createdAt: new Date()
-      };
+      // Insert license with enhanced data
+      const licenseResult = await db.query(`
+        INSERT INTO licenses (
+          license_key, license_type, status, customer_email, customer_name,
+          purchase_source, purchase_date, renewal_date, subscription_id, 
+          subscription_status, stripe_price_id, amount_paid, site_limit, 
+          kill_switch_enabled, resale_monitoring, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+        RETURNING id
+      `, [
+        licenseKey, licenseConfig.type, 'active', customerEmail, customerName,
+        'stripe_checkout', new Date(), renewalDate, subscription.id, 
+        subscription.status, priceId, session.amount_total / 100, 
+        siteLimit, true, true
+      ]);
+      const licenseId = licenseResult.rows[0].id;
       
-      // Generate license key
-      const licenseKey = generateLicenseKey();
-      
-      // Prepare license data
-      const licenseData = {
-        ...customerData,
-        licenseKey,
-        maxSites: getMaxSitesFromPriceId(customerData.priceId)
-      };
-      
-      // Save to database
-      await saveLicenseToDatabase(licenseData);
+      // Record in purchase history
+      await db.query(`
+        INSERT INTO purchase_history (
+          license_id, customer_email, transaction_type, new_license_type,
+          new_license_key, stripe_session_id, stripe_subscription_id,
+          stripe_price_id, amount_paid, purchase_date, renewal_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `, [
+        licenseId, customerEmail, 'purchase', licenseConfig.type, licenseKey,
+        session.id, subscription.id, priceId, session.amount_total / 100, new Date(), renewalDate
+      ]);
       
       // Send welcome email (only in live mode)
       if (!isTestMode) {
-        await sendWelcomeEmail(customerData.email, customerData.name, licenseKey);
+        await sendWelcomeEmail(customerEmail, customerName, licenseKey);
       } else {
-        console.log('🧪 Test mode - would send welcome email to:', customerData.email);
+        console.log('🧪 Test mode - would send welcome email to:', customerEmail);
       }
       
-      console.log('✅ License created for payment link purchase:', customerData.email);
-      
-    } else {
-      // Handle one-time payments (existing logic)
-      const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
-        expand: ['data.price.product']
-      });
-      
-      if (!lineItems.data.length) {
-        console.error('❌ No line items found for session:', session.id);
-        return;
-      }
-      
-      const priceId = lineItems.data[0].price.id;
-      const productId = lineItems.data[0].price.product.id;
-      const customerEmail = session.customer_details?.email;
-      const customerName = session.customer_details?.name || 'Customer';
-      
-      console.log('📦 Product details:', { priceId, productId, customerEmail });
-      
-      // Determine license type based on price ID or product ID
-      const licenseConfig = getLicenseConfig(priceId, productId);
-      if (!licenseConfig) {
-        console.error('❌ Unknown product/price ID:', { priceId, productId });
-        return;
-      }
-      
-      // Generate license key
-      const licenseKey = licenseConfig.prefix + '-' + generateLicenseKey();
-      console.log('🔑 Generated license:', licenseKey);
-      
-      // Calculate expiration date
-      let expirationDate = null;
-      if (licenseConfig.type === 'annual_unlimited') {
-        expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
-      }
-      
-      // Create license in database
-      await db.query(`
-        INSERT INTO licenses (
-          license_key, license_type, status, customer_email, customer_name,
-          purchase_source, trial_expires, site_limit, kill_switch_enabled, 
-          resale_monitoring, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-      `, [
-        licenseKey,
-        licenseConfig.type,
-        'active',
-        customerEmail,
-        customerName,
-        'stripe_checkout',
-        expirationDate,
-        licenseConfig.siteLimit,
-        true,
-        true
-      ]);
-      
-      console.log('✅ License created in database');
-      
-      // Send license email via Pabbly (only in live mode)
-      if (!isTestMode) {
-        const pabblySuccess = await sendToPabbly(customerEmail, licenseKey, licenseConfig.type, {
-          customer_name: customerName,
-          purchase_amount: session.amount_total / 100,
-          currency: session.currency,
-          stripe_session_id: session.id
-        });
-        
-        console.log('📧 License email sent via Pabbly:', pabblySuccess);
-        
-        // Store email collection record
-        await db.query(`
-          INSERT INTO email_collection (
-            email, license_key, collection_source, license_type,
-            customer_name, sent_to_autoresponder, collected_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        `, [
-          customerEmail,
-          licenseKey,
-          'stripe_purchase',
-          licenseConfig.type,
-          customerName,
-          pabblySuccess
-        ]);
-      } else {
-        console.log('🧪 Test mode - would send email to:', customerEmail);
-      }
-      
-      console.log('✅ Checkout processing completed for:', customerEmail);
+      console.log('✅ License created for subscription purchase:', customerEmail);
+      return;
     }
     
   } catch (error) {
@@ -400,47 +322,117 @@ async function handleSubscriptionCancelled(subscription, isTestMode = false) {
   }
 }
 
-// Handle subscription updates (e.g., plan changes, billing cycle changes)
+// Enhanced subscription update handler for upgrades/downgrades
 async function handleSubscriptionUpdated(subscription, isTestMode = false) {
   console.log(`🔄 Subscription updated (${isTestMode ? 'TEST' : 'LIVE'}):`, subscription.id);
-  
   try {
     const customer = await stripe.customers.retrieve(subscription.customer);
-    
-    // Get the price ID to determine license type
-    const priceId = subscription.items.data[0]?.price?.id;
-    const productId = subscription.items.data[0]?.price?.product?.id;
-    
-    // Determine license type based on price/product
-    const licenseConfig = getLicenseConfig(priceId, productId);
-    if (!licenseConfig) {
-      console.error('❌ Unknown subscription product for update:', { priceId, productId });
-      return;
-    }
-    
-    console.log('📦 Updating subscription for license type:', licenseConfig.type);
-    
-    // Update license status and expiration if needed
-    if (subscription.status === 'active') {
-      // For annual subscriptions, update expiration date
-      let expirationDate = null;
-      if (licenseConfig.type === 'annual_unlimited') {
-        // Set expiration to 1 year from now for annual subscriptions
-        expirationDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const newPriceId = subscription.items.data[0]?.price?.id;
+    const newLicenseConfig = getLicenseConfig(newPriceId);
+    // Get current license
+    const currentLicenseResult = await db.query(
+      'SELECT * FROM licenses WHERE customer_email = $1 AND subscription_id = $2',
+      [customer.email, subscription.id]
+    );
+    if (currentLicenseResult.rows.length > 0) {
+      const oldLicense = currentLicenseResult.rows[0];
+      // Check if this is an upgrade or downgrade
+      const isUpgrade = isLicenseUpgrade(oldLicense.license_type, newLicenseConfig.type);
+      const isDowngrade = isLicenseDowngrade(oldLicense.license_type, newLicenseConfig.type);
+      if (isUpgrade || isDowngrade) {
+        await handlePlanChange(oldLicense, newLicenseConfig, subscription, customer, isUpgrade);
       }
-      
-      await db.query(
-        'UPDATE licenses SET status = $1, trial_expires = $2 WHERE customer_email = $3 AND license_type = $4',
-        ['active', expirationDate, customer.email, licenseConfig.type]
-      );
-      
-      console.log('✅ License updated for subscription:', customer.email, 'license type:', licenseConfig.type);
     }
-    
   } catch (error) {
     console.error('❌ Subscription update processing error:', error);
     throw error;
   }
+}
+
+async function handlePlanChange(oldLicense, newLicenseConfig, subscription, customer, isUpgrade) {
+  // For downgrades, check site limits
+  let activeSites = { rows: [{ count: 0 }] };
+  if (!isUpgrade && newLicenseConfig.siteLimit > 0) {
+    activeSites = await db.query(
+      'SELECT COUNT(*) as count FROM site_usage WHERE license_key = $1 AND status = $2',
+      [oldLicense.license_key, 'active']
+    );
+    if (parseInt(activeSites.rows[0].count) > newLicenseConfig.siteLimit) {
+      // Send email requiring site deactivation
+      await sendSiteDeactivationRequired(customer.email, parseInt(activeSites.rows[0].count), newLicenseConfig.siteLimit);
+      // Mark as pending downgrade
+      await db.query(
+        'UPDATE licenses SET status = $1, notes = $2 WHERE id = $3',
+        ['pending_downgrade', `Requires deactivation of ${parseInt(activeSites.rows[0].count) - newLicenseConfig.siteLimit} sites`, oldLicense.id]
+      );
+      return;
+    }
+  }
+  // Generate new license key
+  const newLicenseKey = newLicenseConfig.prefix + '-' + generateLicenseKey();
+  // Deactivate old license
+  await db.query(
+    'UPDATE licenses SET status = $1 WHERE id = $2',
+    [isUpgrade ? 'upgraded' : 'downgraded', oldLicense.id]
+  );
+  // Create new license
+  const newLicenseResult = await db.query(`
+    INSERT INTO licenses (
+      license_key, license_type, status, customer_email, customer_name,
+      purchase_date, renewal_date, subscription_id, subscription_status,
+      stripe_price_id, site_limit, is_upgrade, previous_license_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    RETURNING id
+  `, [
+    newLicenseKey, newLicenseConfig.type, 'active', customer.email, customer.name,
+    new Date(), new Date(subscription.current_period_end * 1000),
+    subscription.id, subscription.status, subscription.items.data[0].price.id,
+    newLicenseConfig.siteLimit, isUpgrade, oldLicense.id
+  ]);
+  // Migrate active sites to new license
+  await db.query(
+    'UPDATE site_usage SET license_key = $1 WHERE license_key = $2 AND status = $3',
+    [newLicenseKey, oldLicense.license_key, 'active']
+  );
+  // Record in purchase history
+  await db.query(`
+    INSERT INTO purchase_history (
+      license_id, customer_email, transaction_type, old_license_type, new_license_type,
+      old_license_key, new_license_key, stripe_subscription_id, stripe_price_id,
+      purchase_date, renewal_date, sites_migrated
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+  `, [
+    newLicenseResult.rows[0].id, customer.email, isUpgrade ? 'upgrade' : 'downgrade',
+    oldLicense.license_type, newLicenseConfig.type, oldLicense.license_key, newLicenseKey,
+    subscription.id, subscription.items.data[0].price.id, new Date(),
+    new Date(subscription.current_period_end * 1000), parseInt(activeSites.rows[0].count)
+  ]);
+}
+
+function isLicenseUpgrade(oldType, newType) {
+  const hierarchy = {
+    'trial': 1,
+    'professional': 2,
+    'annual_unlimited': 3,
+    'lifetime_unlimited': 4
+  };
+  return hierarchy[newType] > hierarchy[oldType];
+}
+
+function isLicenseDowngrade(oldType, newType) {
+  const hierarchy = {
+    'trial': 1,
+    'professional': 2,
+    'annual_unlimited': 3,
+    'lifetime_unlimited': 4
+  };
+  return hierarchy[newType] < hierarchy[oldType];
+}
+
+async function sendSiteDeactivationRequired(email, currentSites, maxSites) {
+  // Send email notification that user needs to deactivate sites before downgrade
+  // Implementation depends on your email system
+  console.log(`⚠️ Site deactivation required for ${email}: ${currentSites} active, limit ${maxSites}`);
 }
 
 // Handle subscription created (backup handler)
@@ -1035,11 +1027,15 @@ router.post('/validate-license', async (req, res) => {
         license_type: license.license_type,
         status: license.status,
         customer_name: license.customer_name,
-        licensed_to: license.customer_name,
-        expires: license.trial_expires || 'Never',
+        customer_email: license.customer_email,
+        purchase_date: license.purchase_date,
+        renewal_date: license.renewal_date || license.annual_expires || 'Never',
+        expires: license.renewal_date || license.annual_expires || 'Never',
         site_limit: siteLimit,
         sites_used: currentUsage,
         sites_remaining: siteLimit > 0 ? Math.max(0, siteLimit - currentUsage) : 'Unlimited',
+        subscription_status: license.subscription_status,
+        is_trial: license.license_type === 'trial',
         company: 'eBiz360',
         validation_source: 'railway_api',
         last_validated: new Date().toISOString()
@@ -1732,6 +1728,11 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
       license_key: licenseKey,
       site_url: metadata.site_url || metadata.website_url || '',
       trial_expires: metadata.trial_expires || '',
+      
+      // Enhanced license/usage fields
+      installs_remaining: metadata.installs_remaining,
+      sites_active: metadata.sites_active,
+      next_renewal: metadata.next_renewal,
       
       // AWeber tagging
       aweber_tags: licenseType === 'trial' ? 'trial-active' : licenseType,
