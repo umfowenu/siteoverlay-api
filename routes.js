@@ -17,6 +17,11 @@ const {
 
 const { sendToPabbly } = require('./utils/pabbly-utils');
 
+// Import route modules
+const trialsRoutes = require('./routes/trials');
+const newsletterRoutes = require('./routes/newsletter');
+const adminRoutes = require('./routes/admin');
+
 // (All old utility function definitions are now removed from the bottom of the file, only initializeDatabase and module.exports = router remain)
 
 // Payment processor integrations
@@ -30,6 +35,11 @@ router.get('/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Register route modules
+router.use('/', trialsRoutes);
+router.use('/', newsletterRoutes);
+router.use('/', adminRoutes);
 
 // ============================================================================
 // STRIPE WEBHOOK HANDLING
@@ -786,111 +796,6 @@ router.post('/validate-license', async (req, res) => {
   }
 });
 
-// Start trial endpoint
-router.post('/start-trial', async (req, res) => {
-  try {
-    const { siteUrl, pluginVersion, productCode, full_name, email } = req.body;
-
-    if (!email || !full_name) {
-      return res.json({
-        success: false,
-        message: 'Name and email are required for trial'
-      });
-    }
-
-    console.log('🆓 Starting trial for:', email, 'Product:', productCode);
-
-    // Check if user already has a trial
-    const existingTrial = await db.query(
-      'SELECT * FROM licenses WHERE customer_email = $1 AND license_type = $2',
-      [email, 'trial']
-    );
-
-    if (existingTrial.rows.length > 0) {
-      const existingLicense = existingTrial.rows[0];
-      
-      return res.json({
-        success: true,
-        message: 'Trial already exists for this email',
-        data: {
-          license_key: existingLicense.license_key,
-          trial_expires: existingLicense.trial_end_date,
-          sites_remaining: Math.max(0, 5 - 0)
-        }
-      });
-    }
-
-    // Generate trial license key
-    const trialLicenseKey = 'TRIAL-' + generateLicenseKey();
-    const trialExpires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
-
-    console.log('💾 Inserting trial license into database...');
-    
-    const licenseResult = await db.query(`
-      INSERT INTO licenses (
-        license_key, license_type, status, customer_email, customer_name,
-        purchase_date, trial_end_date, subscription_id, subscription_status,
-        stripe_price_id, amount_paid, payment_processor, purchase_source, 
-        site_limit, kill_switch_enabled, resale_monitoring, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
-      RETURNING id
-    `, [
-      trialLicenseKey, 'trial', 'trial', email, full_name,
-      new Date(), trialExpires, null, null, null, 0, 'trial',
-      'email_trial_request', 5, true, true
-    ]);
-
-    // Record trial in purchase history
-    await db.query(`
-      INSERT INTO purchase_history (
-        license_id, customer_email, transaction_type, new_license_type,
-        new_license_key, amount_paid, purchase_date, payment_processor, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [
-      licenseResult.rows[0].id, email, 'trial', 'trial', trialLicenseKey,
-      0, new Date(), 'trial', 'Free trial request'
-    ]);
-
-    // Send to Pabbly Connect
-    const pabblySuccess = await sendToPabbly(email, trialLicenseKey, 'trial', {
-      customer_name: full_name,
-      website_url: siteUrl,
-      trial_expires: trialExpires.toISOString(),
-      site_limit: 5
-    });
-
-    // Store in email collection table
-    await db.query(`
-      INSERT INTO email_collection (
-        email, license_key, collection_source, license_type, customer_name,
-        website_url, sent_to_autoresponder, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-    `, [
-      email, trialLicenseKey, 'trial_request', 'trial', full_name,
-      siteUrl || '', pabblySuccess ? 'sent' : 'pending'
-    ]);
-
-    res.json({
-      success: true,
-      message: 'Trial license created successfully',
-      data: {
-        license_key: trialLicenseKey,
-        trial_expires: trialExpires.toISOString(),
-        sites_remaining: 5,
-        customer_name: full_name,
-        customer_email: email
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Trial creation error:', error);
-    res.json({
-      success: false,
-      message: 'Failed to create trial license'
-    });
-  }
-});
-
 // Unregister site endpoint
 router.post('/unregister-site', async (req, res) => {
   try {
@@ -925,141 +830,6 @@ router.post('/unregister-site', async (req, res) => {
       success: false,
       message: 'Failed to unregister site'
     });
-  }
-});
-
-// Newsletter signup endpoint
-router.post('/newsletter-signup', async (req, res) => {
-  try {
-    const { email, source = 'website' } = req.body;
-
-    if (!email) {
-      return res.json({
-        success: false,
-        message: 'Email is required'
-      });
-    }
-
-    console.log('📧 Newsletter signup:', email, 'Source:', source);
-
-    // Check if already subscribed
-    const existing = await db.query(
-      'SELECT * FROM email_collection WHERE email = $1 AND collection_source = $2',
-      [email, 'newsletter']
-    );
-
-    if (existing.rows.length > 0) {
-      return res.json({
-        success: true,
-        message: 'Already subscribed to newsletter'
-      });
-    }
-
-    // Generate a newsletter "license key" for tracking
-    const licenseKey = 'NEWS-' + generateLicenseKey();
-
-    // Send to Pabbly Connect for newsletter
-    const pabblySuccess = await sendToPabbly(email, licenseKey, 'newsletter', {
-      source: source,
-      signup_date: new Date().toISOString()
-    });
-
-    // Store in email collection
-    await db.query(`
-      INSERT INTO email_collection (
-        email, license_key, collection_source, license_type,
-        sent_to_autoresponder, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
-    `, [
-      email, licenseKey, 'newsletter', 'newsletter',
-      pabblySuccess ? 'sent' : 'pending'
-    ]);
-
-    res.json({
-      success: true,
-      message: 'Successfully subscribed to newsletter'
-    });
-
-  } catch (error) {
-    console.error('Newsletter signup error:', error);
-    res.json({
-      success: false,
-      message: 'Failed to subscribe to newsletter'
-    });
-  }
-});
-
-// ============================================================================
-// ADMIN ENDPOINTS
-// ============================================================================
-
-// Admin endpoint to update license
-router.post('/admin/update-license', async (req, res) => {
-  try {
-    const { license_key, admin_key, ...updates } = req.body;
-
-    if (admin_key !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    if (!license_key) {
-      return res.json({ success: false, message: 'License key required' });
-    }
-
-    // Build update query dynamically
-    const allowedFields = ['license_type', 'status', 'customer_email', 'customer_name', 'site_limit', 'renewal_date', 'kill_switch_enabled'];
-    const updateFields = [];
-    const values = [];
-    let paramIndex = 1;
-
-    for (const [field, value] of Object.entries(updates)) {
-      if (allowedFields.includes(field)) {
-        updateFields.push(`${field} = $${paramIndex}`);
-        values.push(value);
-        paramIndex++;
-      }
-    }
-
-    if (updateFields.length === 0) {
-      return res.json({ success: false, message: 'No valid fields to update' });
-    }
-
-    values.push(license_key);
-    
-    await db.query(
-      `UPDATE licenses SET ${updateFields.join(', ')} WHERE license_key = $${paramIndex}`,
-      values
-    );
-
-    res.json({ success: true, message: 'License updated successfully' });
-
-  } catch (error) {
-    console.error('Admin update error:', error);
-    res.status(500).json({ error: 'Update failed' });
-  }
-});
-
-// Kill switch control endpoint
-router.post('/admin/toggle-kill-switch', async (req, res) => {
-  try {
-    const { license_key, enabled, admin_key } = req.body;
-    
-    if (admin_key !== process.env.ADMIN_API_KEY) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    await db.query(
-      'UPDATE licenses SET kill_switch_enabled = $1 WHERE license_key = $2',
-      [enabled, license_key]
-    );
-    
-    res.json({
-      success: true,
-      message: `Kill switch ${enabled ? 'enabled' : 'disabled'} for license ${license_key}`
-    });
-  } catch (error) {
-    console.error('Kill switch toggle error:', error);
-    res.status(500).json({ error: 'Failed to toggle kill switch' });
   }
 });
 
