@@ -1175,18 +1175,24 @@ function generateSiteSignature(siteData) {
 // Get license type from Stripe price ID
 function getLicenseTypeFromStripePrice(priceId) {
   const priceMapping = {
-    'price_1234567890': '5_site_license',
-    'price_0987654321': 'annual_unlimited',
-    'price_1111111111': 'lifetime_unlimited'
+    // Production/Live Price IDs
+    'price_1RkGCpBnsFQAR5m9DrXgUzoU': '5_site_license',           // Live: 5 Sites
+    'price_1RmEjHBnsFQAR5m9D9zBFmJf': 'annual_unlimited',        // Live: Annual Unlimited  
+    'price_1RkGEXBnsFQAR5m9tYO2qQ6v': 'lifetime_unlimited',      // Live: Lifetime Unlimited
+    
+    // Test/Sandbox Price IDs
+    'price_1RkFGwBnsFQAR5m9Mqu8gTJQ': '5_site_license',           // Test: 5 Sites
+    'price_1RmEsBBnsFQAR5m9CcwlIovq': 'annual_unlimited',        // Test: Annual Unlimited
+    'price_1RkFIiBnsFQAR5m9qNGDmIxN': 'lifetime_unlimited'       // Test: Lifetime Unlimited
   };
   return priceMapping[priceId] || '5_site_license';
 }
 
 // Get license type from PayPal amount
 function getLicenseTypeFromPayPalAmount(amount) {
-  if (amount >= 297) return 'lifetime_unlimited';
-  if (amount >= 97) return 'annual_unlimited';
-  return '5_site_license';
+  if (amount >= 297) return 'lifetime_unlimited';     // $297+ = Lifetime
+  if (amount >= 97) return 'annual_unlimited';        // $97+ = Annual  
+  return '5_site_license';                            // Under $97 = 5 Sites
 }
 
 // Get license type from WarriorPlus product ID
