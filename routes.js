@@ -66,7 +66,7 @@ router.get('/diagnostic', (req, res) => {
       port: process.env.PORT || 'not set',
       database_url: process.env.DATABASE_URL ? 'set' : 'not set',
       stripe_secret_key: process.env.STRIPE_SECRET_KEY ? 'set' : 'not set',
-      pabbly_webhook_url: process.env.PABBLY_WEBHOOK_URL ? 'set' : 'not set'
+      pabbly_webhook_url: process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY ? 'set' : 'not set'
     },
     modules: {
       express: typeof express !== 'undefined' ? 'loaded' : 'not loaded',

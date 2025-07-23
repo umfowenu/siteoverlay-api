@@ -81,8 +81,8 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
     console.log('Sending to Pabbly Connect:', { email, licenseKey, licenseType, sitesActive, sitesRemaining });
 
     // Send to Pabbly Connect webhook
-    if (process.env.PABBLY_WEBHOOK_URL) {
-      const response = await fetch(process.env.PABBLY_WEBHOOK_URL, {
+    if (process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
