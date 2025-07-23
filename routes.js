@@ -39,6 +39,46 @@ router.get('/health', (req, res) => {
   });
 });
 
+// Test endpoint to verify routing is working
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Main routes.js is working correctly',
+    modules: {
+      trials: 'imported',
+      newsletter: 'imported', 
+      admin: 'imported',
+      stripe: 'imported',
+      paypal: 'imported',
+      warriorplus: 'imported'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Diagnostic endpoint to check environment and imports
+router.get('/diagnostic', (req, res) => {
+  const diagnostics = {
+    success: true,
+    timestamp: new Date().toISOString(),
+    environment: {
+      node_env: process.env.NODE_ENV || 'not set',
+      port: process.env.PORT || 'not set',
+      database_url: process.env.DATABASE_URL ? 'set' : 'not set',
+      stripe_secret_key: process.env.STRIPE_SECRET_KEY ? 'set' : 'not set',
+      pabbly_webhook_url: process.env.PABBLY_WEBHOOK_URL ? 'set' : 'not set'
+    },
+    modules: {
+      express: typeof express !== 'undefined' ? 'loaded' : 'not loaded',
+      db: typeof db !== 'undefined' ? 'loaded' : 'not loaded',
+      trialsRoutes: typeof trialsRoutes !== 'undefined' ? 'loaded' : 'not loaded',
+      stripeRoutes: typeof stripeRoutes !== 'undefined' ? 'loaded' : 'not loaded'
+    }
+  };
+  
+  res.json(diagnostics);
+});
+
 // Register route modules
 router.use('/', trialsRoutes);
 router.use('/', newsletterRoutes);

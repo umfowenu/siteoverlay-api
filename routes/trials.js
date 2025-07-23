@@ -5,6 +5,15 @@ const db = require('../db');
 const { generateLicenseKey } = require('../utils/license-mappings');
 const { sendToPabbly } = require('../utils/pabbly-utils');
 
+// Test endpoint to check if the module is working
+router.get('/test-trial', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Trials module is working correctly',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Start trial endpoint
 router.post('/start-trial', async (req, res) => {
   try {
@@ -105,7 +114,8 @@ router.post('/start-trial', async (req, res) => {
     console.error('❌ Trial creation error:', error);
     res.json({
       success: false,
-      message: 'Failed to create trial license'
+      message: 'Failed to create trial license',
+      error: error.message
     });
   }
 });
