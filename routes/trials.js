@@ -301,4 +301,40 @@ router.get('/get-trial-details', async (req, res) => {
   }
 });
 
+// Test endpoint for trial-end notification
+router.post('/test-trial-end', async (req, res) => {
+  try {
+    const { email, license_key, customer_name } = req.body;
+    if (!email || !license_key || !customer_name) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'email, license_key, and customer_name are required' 
+      });
+    }
+    console.log('Testing trial-end notification for:', email);
+    const success = await sendTrialToPabbly(email, license_key, {
+      customer_name: customer_name,
+      website_url: 'https://test-site.com', // placeholder
+      trial_expires: new Date().toISOString(),
+      aweber_tags: 'trial-end'  // This will become "trial-end,https://siteoverlay.24hr.pro"
+    });
+    res.json({ 
+      success: success, 
+      message: success ? 'Trial end notification sent to Pabbly' : 'Failed to send notification',
+      data: {
+        email: email,
+        license_key: license_key,
+        customer_name: customer_name,
+        tags_sent: 'trial-end,https://siteoverlay.24hr.pro'
+      }
+    });
+  } catch (error) {
+    console.error('Test trial-end error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router; 
