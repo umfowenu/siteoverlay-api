@@ -276,4 +276,29 @@ router.post('/check-expiring-trials', async (req, res) => {
   }
 });
 
+// Temporary endpoint to get the most recent trial license details
+router.get('/get-trial-details', async (req, res) => {
+  try {
+    const trials = await db.query(`
+      SELECT 
+        license_key,
+        customer_email,
+        customer_name,
+        trial_end_date,
+        status,
+        created_at
+      FROM licenses 
+      WHERE license_type = 'trial'
+      ORDER BY created_at DESC 
+      LIMIT 5
+    `);
+    res.json({ 
+      success: true, 
+      trials: trials.rows 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router; 
