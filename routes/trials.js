@@ -311,16 +311,23 @@ router.post('/test-trial-end', async (req, res) => {
         message: 'email, license_key, and customer_name are required' 
       });
     }
-    console.log('Testing trial-end notification for:', email);
+    console.log('=== DEBUG INFO ===');
+    console.log('Environment variable:', process.env.PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER);
+    console.log('Webhook URL exists:', !!process.env.PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER);
     const success = await sendTrialToPabbly(email, license_key, {
       customer_name: customer_name,
       website_url: 'https://test-site.com', // placeholder
       trial_expires: new Date().toISOString(),
       aweber_tags: 'trial-end'  // This will become "trial-end,https://siteoverlay.24hr.pro"
     });
+    console.log('Pabbly response success:', success);
     res.json({ 
       success: success, 
       message: success ? 'Trial end notification sent to Pabbly' : 'Failed to send notification',
+      debug: {
+        webhook_url_exists: !!process.env.PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER,
+        webhook_url: process.env.PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER ? 'SET' : 'NOT SET'
+      },
       data: {
         email: email,
         license_key: license_key,
