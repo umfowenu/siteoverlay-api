@@ -108,6 +108,42 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
   }
 }
 
+// New function for trial Pabbly integration
+async function sendTrialToPabbly(email, licenseKey, metadata = {}) {
+  try {
+    const pabblyData = {
+      trial_expires: metadata.trial_expires || '',
+      trial_duration: '14 days',
+      support_email: process.env.SUPPORT_EMAIL || 'support@siteoverlaypro.com',
+      site_url: metadata.website_url || metadata.site_url || '',
+      signup_date: new Date().toISOString(),
+      product_name: 'SiteOverlay Pro',
+      license_type: 'trial',
+      license_key: licenseKey,
+      email: email,
+      customer_name: metadata.customer_name || '',
+      aweber_tags: metadata.aweber_tags || 'trial-active',
+      sales_page: process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro'
+    };
+
+    console.log('Sending trial to Pabbly:', pabblyData);
+
+    if (process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pabblyData)
+      });
+      return response.ok;
+    }
+    return false;
+  } catch (error) {
+    console.error('❌ Trial Pabbly error:', error);
+    return false;
+  }
+}
+
 module.exports = {
-  sendToPabbly
+  sendToPabbly,      // Keep existing for purchases
+  sendTrialToPabbly // New for trials
 }; 

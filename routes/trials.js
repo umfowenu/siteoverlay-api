@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { generateLicenseKey } = require('../utils/license-mappings');
-const { sendToPabbly } = require('../utils/pabbly-utils');
+const { sendToPabbly, sendTrialToPabbly } = require('../utils/pabbly-utils');
 
 // Test endpoint to check if the module is working
 router.get('/test-trial', (req, res) => {
@@ -79,12 +79,12 @@ router.post('/start-trial', async (req, res) => {
       0, new Date(), 'trial', 'Free trial request'
     ]);
 
-    // Send to Pabbly Connect
-    const pabblySuccess = await sendToPabbly(email, trialLicenseKey, 'trial', {
+    // Send to Pabbly Connect (trials)
+    const pabblySuccess = await sendTrialToPabbly(email, trialLicenseKey, {
       customer_name: full_name,
       website_url: siteUrl,
       trial_expires: trialExpires.toISOString(),
-      site_limit: 5
+      aweber_tags: 'trial-active'
     });
 
     // Store in email collection table
@@ -190,12 +190,12 @@ router.post('/request-trial', async (req, res) => {
       0, new Date(), 'trial', 'WordPress plugin trial request'
     ]);
 
-    // Send to Pabbly Connect
-    const pabblySuccess = await sendToPabbly(email, trialLicenseKey, 'trial', {
+    // Send to Pabbly Connect (trials)
+    const pabblySuccess = await sendTrialToPabbly(email, trialLicenseKey, {
       customer_name: full_name,
       website_url: siteUrl,
       trial_expires: trialExpires.toISOString(),
-      site_limit: 5
+      aweber_tags: 'trial-active'
     });
 
     // Store in email collection table
@@ -227,6 +227,52 @@ router.post('/request-trial', async (req, res) => {
       success: false,
       message: 'Failed to create trial license'
     });
+  }
+});
+
+// Check for trials expiring today and send "trial-end" notification
+router.post('/check-expiring-trials', async (req, res) => {
+  try {
+    // Get trials expiring today (no grace period for trials)
+    const today = new Date();
+    const expiringTrials = await db.query(`
+      SELECT license_key, customer_email, customer_name, trial_end_date
+      FROM licenses 
+      WHERE license_type = 'trial' 
+      AND status = 'trial'
+      AND DATE(trial_end_date) = DATE($1)
+      AND trial_end_notified != true
+    `, [today]);
+
+    console.log(`Found ${expiringTrials.rows.length} trials expiring today`);
+
+    for (const trial of expiringTrials.rows) {
+      // Send "trial-end" notification to Pabbly
+      const pabblySuccess = await sendTrialToPabbly(trial.customer_email, trial.license_key, {
+        customer_name: trial.customer_name,
+        trial_expires: trial.trial_end_date,
+        aweber_tags: 'trial-end'
+      });
+
+      if (pabblySuccess) {
+        // Mark as notified
+        await db.query(`
+          UPDATE licenses 
+          SET trial_end_notified = true 
+          WHERE license_key = $1
+        `, [trial.license_key]);
+        console.log(`✅ Trial end notification sent for: ${trial.customer_email}`);
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      trials_processed: expiringTrials.rows.length 
+    });
+
+  } catch (error) {
+    console.error('❌ Error checking expiring trials:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
