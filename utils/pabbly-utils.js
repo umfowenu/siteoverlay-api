@@ -122,8 +122,11 @@ async function sendTrialToPabbly(email, licenseKey, metadata = {}) {
       license_key: licenseKey,
       email: email,
       customer_name: metadata.customer_name || '',
-      aweber_tags: metadata.aweber_tags || 'trial-active',
-      sales_page: process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro'
+      // Comma-separated tags for AWeber
+      aweber_tags: [
+        metadata.aweber_tags || 'trial-active',
+        process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro'
+      ].join(',')
     };
 
     console.log('Sending trial to Pabbly:', pabblyData);
