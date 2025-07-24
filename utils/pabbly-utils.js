@@ -131,8 +131,8 @@ async function sendTrialToPabbly(email, licenseKey, metadata = {}) {
 
     console.log('Sending trial to Pabbly:', pabblyData);
 
-    if (process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY) {
-      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY, {
+    if (process.env.PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pabblyData)
