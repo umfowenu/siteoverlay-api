@@ -90,11 +90,11 @@ router.post('/start-trial', async (req, res) => {
     // Store in email collection table
     await db.query(`
       INSERT INTO email_collection (
-        email, license_key, collection_source, license_type, customer_name,
-        website_url, sent_to_autoresponder, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        email, license_key, collection_source, license_type, 
+        site_url, sent_to_autoresponder, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
     `, [
-      email, trialLicenseKey, 'trial_request', 'trial', full_name,
+      email, trialLicenseKey, 'trial_request', 'trial',
       siteUrl || '', pabblySuccess ? 'sent' : 'pending'
     ]);
 
@@ -201,11 +201,11 @@ router.post('/request-trial', async (req, res) => {
     // Store in email collection table
     await db.query(`
       INSERT INTO email_collection (
-        email, license_key, collection_source, license_type, customer_name,
-        website_url, sent_to_autoresponder, collected_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+        email, license_key, collection_source, license_type, 
+        site_url, sent_to_autoresponder, collected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
     `, [
-      email, trialLicenseKey, 'trial_request', 'trial', full_name,
+      email, trialLicenseKey, 'trial_request', 'trial',
       siteUrl || '', pabblySuccess ? 'sent' : 'pending'
     ]);
 
