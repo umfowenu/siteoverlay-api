@@ -3,7 +3,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { generateLicenseKey } = require('../utils/license-mappings');
-const { sendToPabbly, sendTrialToPabbly } = require('../utils/pabbly-utils');
+const { sendToPabbly, sendTrialToPabbly, sendLicenseUpdateToPabbly } = require('../utils/pabbly-utils');
+const { generateSiteSignature } = require('../utils/site-signature');
 
 // Test endpoint to check if the module is working
 router.get('/test-trial', (req, res) => {
@@ -296,6 +297,116 @@ router.post('/check-expiring-trials', async (req, res) => {
   } catch (error) {
     console.error('❌ Error checking expiring trials:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PAID LICENSE REQUEST ENDPOINT
+ *
+ * @description Handles paid license requests for new site installations
+ *
+ * BUSINESS LOGIC:
+ *   - Validates full name, email, and domain
+ *   - Checks for active subscription (monthly/annual/lifetime) by email
+ *   - Enforces site limits for the subscription
+ *   - Generates new site-specific license key (SITE-XXXX-XXXX-XXXX)
+ *   - Registers the site in site_usage table
+ *   - Sends license to customer via email (Pabbly/AWeber)
+ *   - Does NOT send license key to plugin (email delivery only)
+ *
+ * DATABASE OPERATIONS:
+ *   - SELECT licenses by customer_email and license_type
+ *   - COUNT active sites for license
+ *   - INSERT new site_usage record with site_license_key
+ *
+ * INTEGRATION:
+ *   - Uses sendLicenseUpdateToPabbly() for email delivery
+ *   - Uses PABBLY_WEBHOOK_URL_LICENSE_UPDATE webhook
+ *
+ * ERROR HANDLING:
+ *   - No active subscription found → "Please purchase or request a trial"
+ *   - Site limit exceeded → "Site limit reached (X sites). Please upgrade"
+ *   - Database errors → "Failed to process license request"
+ *
+ * @param {string} name - Full name of customer
+ * @param {string} email - Customer email address
+ * @param {string} domain - Site domain for license
+ * @returns {Object} Success or error message
+ */
+router.post('/request-paid-license', async (req, res) => {
+  try {
+    const { name, email, domain } = req.body;
+    if (!name || !email || !domain) {
+      return res.json({
+        success: false,
+        message: 'Full name, email, and domain are required'
+      });
+    }
+    // 1. Find active subscription by email
+    const subscription = await db.query(`
+      SELECT * FROM licenses 
+      WHERE customer_email = $1 
+      AND (license_type = 'monthly' OR license_type = 'annual' OR license_type = 'lifetime')
+      AND status = 'active'
+      AND kill_switch_enabled = true
+    `, [email]);
+    if (subscription.rows.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No active subscription found. Please purchase or request a trial.'
+      });
+    }
+    // 2. Check site limits
+    const mainLicense = subscription.rows[0];
+    const currentSites = await db.query(`
+      SELECT COUNT(*) as count FROM site_usage 
+      WHERE license_key = $1 AND status = 'active'
+    `, [mainLicense.license_key]);
+    const siteCount = parseInt(currentSites.rows[0].count);
+    const siteLimit = mainLicense.site_limit;
+    if (siteLimit > 0 && siteCount >= siteLimit) {
+      return res.json({
+        success: false,
+        message: `Site limit reached (${siteLimit} sites). Please upgrade your subscription.`
+      });
+    }
+    // 3. Generate new site-specific license
+    const siteLicenseKey = 'SITE-' + generateLicenseKey();
+    // 4. Register the site
+    await db.query(`
+      INSERT INTO site_usage (
+        license_key, site_signature, site_domain, site_url, 
+        site_license_key, customer_email, customer_name, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      mainLicense.license_key,
+      generateSiteSignature({ site_domain: new URL(domain).hostname }),
+      new URL(domain).hostname,
+      domain,
+      siteLicenseKey,
+      email,
+      name,
+      'active'
+    ]);
+    // 5. Send to Pabbly (Connection 2) - Email delivery with license
+    await sendLicenseUpdateToPabbly(email, siteLicenseKey, {
+      customer_name: name,
+      site_url: domain,
+      license_type: mainLicense.license_type,
+      installs_remaining: siteLimit > 0 ? (siteLimit - siteCount - 1).toString() : 'Unlimited',
+      sites_active: (siteCount + 1).toString(),
+      aweber_tags: 'site-license-generated,license-email-sent'
+    });
+    res.json({
+      success: true,
+      message: 'License generated and sent to your email. Check your inbox for the license key.'
+    });
+  } catch (error) {
+    console.error('❌ Paid license request error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to process license request'
+    });
   }
 });
 

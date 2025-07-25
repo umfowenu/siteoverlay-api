@@ -225,7 +225,69 @@ async function sendTrialToPabbly(email, licenseKey, metadata = {}) {
   }
 }
 
+/**
+ * LICENSE UPDATE WEBHOOK: Send paid license data to Pabbly for AWeber tag updates
+ *
+ * @description Sends paid license events to Pabbly for AWeber automation (existing subscribers)
+ *
+ * BUSINESS LOGIC:
+ *   - Used for new paid license generation (site-license-generated)
+ *   - Adds tags to existing AWeber subscribers (no duplicate creation)
+ *   - Tags are comma-separated: "site-license-generated,license-email-sent,https://siteoverlay.24hr.pro"
+ *   - Sales page URL included for dynamic email content
+ *
+ * WEBHOOK USED:
+ *   - PABBLY_WEBHOOK_URL_LICENSE_UPDATE (add tags to existing subscriber)
+ *
+ * AWEBER INTEGRATION:
+ *   - Adds site-license-generated tag to existing subscriber
+ *   - Triggers license delivery automation in AWeber
+ *
+ * @param {string} email - Customer email address
+ * @param {string} siteLicenseKey - Site-specific license key (format: SITE-XXXX-XXXX-XXXX)
+ * @param {object} metadata - Additional data (customer_name, site_url, license_type, installs_remaining, sites_active, aweber_tags)
+ * @returns {boolean} - True if webhook sent successfully
+ */
+async function sendLicenseUpdateToPabbly(email, siteLicenseKey, metadata = {}) {
+  try {
+    const pabblyData = {
+      email: email,
+      customer_name: metadata.customer_name,
+      site_license_key: siteLicenseKey,
+      site_url: metadata.site_url,
+      license_type: metadata.license_type,
+      installs_remaining: metadata.installs_remaining,
+      sites_active: metadata.sites_active,
+      support_email: process.env.SUPPORT_EMAIL,
+      login_instructions: 'Go to WordPress Admin → Settings → SiteOverlay Pro → Enter License Key',
+      aweber_tags: [
+        metadata.aweber_tags || 'site-license-generated,license-email-sent',
+        process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro'
+      ].join(',')
+    };
+    if (process.env.PABBLY_WEBHOOK_URL_LICENSE_UPDATE) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_UPDATE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pabblyData)
+      });
+      if (response.ok) {
+        console.log('✅ License email sent via Pabbly to:', email);
+        return true;
+      } else {
+        console.error('❌ License email failed:', response.status);
+        return false;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('❌ License email error:', error);
+    return false;
+  }
+}
+
 module.exports = {
   sendToPabbly,      // Keep existing for purchases
-  sendTrialToPabbly // New for trials
+  sendTrialToPabbly, // For trials
+  sendLicenseUpdateToPabbly // For paid license email delivery
 }; 
