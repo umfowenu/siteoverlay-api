@@ -82,7 +82,7 @@ router.post('/start-trial', async (req, res) => {
     // Send to Pabbly Connect (trials)
     const pabblySuccess = await sendTrialToPabbly(email, trialLicenseKey, {
       customer_name: full_name,
-      website_url: siteUrl,
+      site_url: siteUrl,
       trial_expires: trialExpires.toISOString(),
       aweber_tags: 'trial-active'
     });
@@ -91,7 +91,7 @@ router.post('/start-trial', async (req, res) => {
     await db.query(`
       INSERT INTO email_collection (
         email, license_key, collection_source, license_type, customer_name,
-        website_url, sent_to_autoresponder, collected_at
+        site_url, sent_to_autoresponder, collected_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
     `, [
       email, trialLicenseKey, 'trial_request', 'trial', full_name,
@@ -193,7 +193,7 @@ router.post('/request-trial', async (req, res) => {
     // Send to Pabbly Connect (trials)
     const pabblySuccess = await sendTrialToPabbly(email, trialLicenseKey, {
       customer_name: full_name,
-      website_url: siteUrl,
+      site_url: siteUrl,
       trial_expires: trialExpires.toISOString(),
       aweber_tags: 'trial-active'
     });
@@ -202,7 +202,7 @@ router.post('/request-trial', async (req, res) => {
     await db.query(`
       INSERT INTO email_collection (
         email, license_key, collection_source, license_type, customer_name,
-        website_url, sent_to_autoresponder, collected_at
+        site_url, sent_to_autoresponder, collected_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
     `, [
       email, trialLicenseKey, 'trial_request', 'trial', full_name,
@@ -449,7 +449,7 @@ router.post('/test-trial-end', async (req, res) => {
     console.log('Webhook URL exists:', !!process.env.PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER);
     const success = await sendTrialToPabbly(email, license_key, {
       customer_name: customer_name,
-      website_url: 'https://test-site.com', // placeholder
+      site_url: 'https://test-site.com', // placeholder
       trial_expires: new Date().toISOString(),
       aweber_tags: 'trial-end'  // This will become "trial-end,https://siteoverlay.24hr.pro"
     });
