@@ -3,6 +3,28 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
+/**
+ * ADMIN LICENSE UPDATE ENDPOINT
+ *
+ * @description Allows admin to update license fields (type, status, email, site limit, renewal, kill switch)
+ *
+ * BUSINESS LOGIC:
+ *   - Only allows updates to specific fields (whitelisted)
+ *   - Requires ADMIN_API_KEY for authentication
+ *   - Used for manual corrections, upgrades, or emergency disables
+ *
+ * DATABASE OPERATIONS:
+ *   - UPDATE licenses SET ... WHERE license_key = ...
+ *
+ * SECURITY:
+ *   - Admin-only access (requires admin_key)
+ *   - Logs all update attempts and errors
+ *
+ * @param {string} license_key - License key to update
+ * @param {string} admin_key - Admin API key for authentication
+ * @param {object} updates - Fields to update (license_type, status, etc.)
+ * @returns {Object} Success or error message
+ */
 // Admin endpoint to update license
 router.post('/admin/update-license', async (req, res) => {
   try {
@@ -49,6 +71,31 @@ router.post('/admin/update-license', async (req, res) => {
   }
 });
 
+/**
+ * KILL SWITCH CONTROL ENDPOINT
+ *
+ * @description Immediately enables or disables a license (admin override)
+ *
+ * BUSINESS LOGIC:
+ *   - Sets kill_switch_enabled to true/false for a license
+ *   - Disabling the kill switch immediately disables all plugin features
+ *   - Used for fraud, abuse, or emergency disables
+ *
+ * DATABASE OPERATIONS:
+ *   - UPDATE licenses SET kill_switch_enabled = ... WHERE license_key = ...
+ *
+ * NOTIFICATIONS:
+ *   - May trigger Pabbly/AWeber notification for license disabled (future)
+ *
+ * SECURITY:
+ *   - Admin-only access (requires admin_key)
+ *   - Logs all toggle attempts and errors
+ *
+ * @param {string} license_key - License key to toggle
+ * @param {boolean} enabled - Whether to enable or disable the kill switch
+ * @param {string} admin_key - Admin API key for authentication
+ * @returns {Object} Success or error message
+ */
 // Kill switch control endpoint
 router.post('/admin/toggle-kill-switch', async (req, res) => {
   try {

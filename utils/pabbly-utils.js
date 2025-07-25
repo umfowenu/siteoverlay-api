@@ -165,7 +165,29 @@ async function sendToPabbly(email, licenseKey, licenseType, metadata = {}) {
   }
 }
 
-// New function for trial Pabbly integration
+/**
+ * TRIAL-SPECIFIC WEBHOOK: Send trial data to Pabbly for AWeber tag updates
+ *
+ * @description Sends trial events to Pabbly for AWeber automation (existing subscribers)
+ *
+ * BUSINESS LOGIC:
+ *   - Used for trial-end notifications (aweber_tags: 'trial-end')
+ *   - Adds tags to existing AWeber subscribers (no duplicate creation)
+ *   - Tags are comma-separated: "trial-end,https://siteoverlay.24hr.pro"
+ *   - Sales page URL included for dynamic email content
+ *
+ * WEBHOOK USED:
+ *   - PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER (add tags to existing subscriber)
+ *
+ * AWEBER INTEGRATION:
+ *   - Adds trial-end tag to existing subscriber
+ *   - Triggers renewal/upgrade automation in AWeber
+ *
+ * @param {string} email - Customer email address
+ * @param {string} licenseKey - Trial license key (format: TRIAL-XXXX-XXXX-XXXX)
+ * @param {object} metadata - Additional data (customer_name, trial_expires, aweber_tags)
+ * @returns {boolean} - True if webhook sent successfully
+ */
 async function sendTrialToPabbly(email, licenseKey, metadata = {}) {
   try {
     const pabblyData = {
