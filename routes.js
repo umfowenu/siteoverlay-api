@@ -92,6 +92,41 @@ router.use('/', warriorplusRoutes);
 // LICENSE VALIDATION AND MANAGEMENT
 // ============================================================================
 
+/**
+ * LICENSE VALIDATION ENDPOINT
+ *
+ * @description Validates license status for WordPress plugin
+ *
+ * BUSINESS LOGIC:
+ *   - Checks license_key against the licenses table in the database
+ *   - Verifies license exists and is not expired, revoked, or disabled
+ *   - Checks kill_switch_enabled field for immediate disable
+ *   - Handles trial expiration and renewal dates
+ *   - Enforces site limits and site registration
+ *   - Returns feature permissions and license details for plugin
+ *
+ * DATABASE OPERATIONS:
+ *   - SELECT license by license_key
+ *   - Checks status, expiration, kill switch, and site usage
+ *   - Optionally registers new site if siteUrl provided and under limit
+ *
+ * INTEGRATION:
+ *   - Plugin expects JSON response with features_enabled, license_type, expiry_date, etc.
+ *   - Response format must be consistent for plugin consumption
+ *
+ * ENVIRONMENT VARIABLES:
+ *   - DB_CONNECTION_STRING: PostgreSQL connection
+ *   - CORS_ORIGIN: Allowed origin for API requests (if applicable)
+ *
+ * SECURITY:
+ *   - Validates domain/siteUrl
+ *   - Ensures only valid, active licenses are accepted
+ *   - Handles kill switch and admin disables
+ *
+ * @param {string} licenseKey - License key to validate (from plugin)
+ * @param {string} siteUrl - Site URL requesting validation
+ * @returns {Object} License status with features_enabled, license_type, expiry_date, etc.
+ */
 // License validation endpoint
 router.post('/validate-license', async (req, res) => {
   try {
