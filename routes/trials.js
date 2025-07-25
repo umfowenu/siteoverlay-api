@@ -2,9 +2,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { generateLicenseKey } = require('../utils/license-mappings');
+const { generateLicenseKey, generateSiteSignature } = require('../utils/license-mappings');
 const { sendToPabbly, sendTrialToPabbly, sendLicenseUpdateToPabbly } = require('../utils/pabbly-utils');
-const { generateSiteSignature } = require('../utils/site-signature');
 
 // Test endpoint to check if the module is working
 router.get('/test-trial', (req, res) => {
