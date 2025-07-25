@@ -1,3 +1,60 @@
+/**
+ * ENVIRONMENT VARIABLES DOCUMENTATION
+ *
+ * TRIAL FLOW VARIABLES:
+ *
+ * PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY
+ *   Purpose: New trial subscriber registration
+ *   When: User completes trial registration form
+ *   Action: Creates new subscriber in AWeber with trial-active tag
+ *   Example: https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjUwNTY0...
+ *
+ * PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER  
+ *   Purpose: Add tags to existing trial subscribers
+ *   When: Trial expires (daily cron check)
+ *   Action: Adds trial-end tag to existing AWeber subscriber
+ *   Example: https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjYwNTZh...
+ *
+ * SALES_PAGE_URL
+ *   Purpose: Dynamic sales page URL included in email tags
+ *   Usage: Sent as part of aweber_tags for email personalization
+ *   Default: https://siteoverlay.24hr.pro
+ *   Note: Can be updated centrally to change all email links
+ *
+ * SUPPORT_EMAIL
+ *   Purpose: Support contact email for customer communications
+ *   Usage: Included in all Pabbly webhook data
+ *   Default: support@siteoverlaypro.com
+ */
+
+/**
+ * TRIAL FLOW: Send trial data to Pabbly for AWeber integration
+ * 
+ * PURPOSE: Sends trial events to Pabbly which routes to AWeber for email automation
+ * TRIGGERS: 
+ *   - Trial registration (aweber_tags: 'trial-active')
+ *   - Trial expiry (aweber_tags: 'trial-end') 
+ * 
+ * BUSINESS LOGIC:
+ *   - New trials get 'trial-active' tag for welcome email automation
+ *   - Expiring trials get 'trial-end' tag for renewal email automation
+ *   - Tags are comma-separated: "trial-active,https://siteoverlay.24hr.pro"
+ *   - Sales page URL included in tags for dynamic email content
+ * 
+ * WEBHOOKS USED:
+ *   - PABBLY_WEBHOOK_URL_TRIAL_SITEOVERLAY (new subscriber registration)
+ *   - PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER (add tags to existing subscriber)
+ * 
+ * AWEBER INTEGRATION:
+ *   - New subscribers: Creates subscriber + adds trial-active tag
+ *   - Existing subscribers: Adds trial-end tag without creating duplicate
+ *   - Both tags trigger different email sequences in AWeber
+ * 
+ * @param {string} email - Customer email address
+ * @param {string} licenseKey - Trial license key (format: TRIAL-XXXX-XXXX-XXXX)
+ * @param {object} metadata - Additional data (customer_name, trial_expires, aweber_tags)
+ * @returns {boolean} - True if webhook sent successfully
+ */
 // Pabbly Connect integration with enhanced AWeber data
 const db = require('../db');
 

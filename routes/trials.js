@@ -230,7 +230,30 @@ router.post('/request-trial', async (req, res) => {
   }
 });
 
-// Check for trials expiring today and send "trial-end" notification
+/**
+ * TRIAL EXPIRY MONITORING ENDPOINT
+ * 
+ * BUSINESS LOGIC:
+ *   - Runs daily via cron job to check for trials expiring TODAY
+ *   - NO grace period for trials (expire exactly at 14 days)
+ *   - Sends trial-end notification to trigger AWeber renewal emails
+ *   - Marks trials as notified to prevent duplicate emails
+ * 
+ * DATABASE LOGIC:
+ *   - Finds trials where DATE(trial_end_date) = TODAY
+ *   - Only processes trials not already notified (trial_end_notified != true)
+ *   - Updates trial_end_notified = true after successful notification
+ * 
+ * PABBLY INTEGRATION:
+ *   - Uses PABBLY_WEBHOOK_URL_TRIAL_EMAIL_UPDATER webhook
+ *   - Sends trial-end tag to add to existing AWeber subscriber
+ *   - Includes sales page URL for dynamic email content
+ * 
+ * CRON SETUP:
+ *   - Should be called daily at specific time (e.g., 9 AM)
+ *   - Requires CRON_SECRET header for security
+ *   - Example: curl -X POST -H "x-cron-secret: SECRET" /api/check-expiring-trials
+ */
 router.post('/check-expiring-trials', async (req, res) => {
   try {
     // Get trials expiring today (no grace period for trials)
