@@ -154,6 +154,51 @@ router.post('/validate-license', async (req, res) => {
 
     const license = licenseResult.rows[0];
 
+    // PREVENT TRIAL KEYS IN LICENSE VALIDATION
+    if (licenseKey.startsWith('TRIAL-')) {
+      return res.json({
+        success: false,
+        message: 'Trial keys cannot be used for license activation. Please enter your paid license key, or use the trial request form to start a trial.'
+      });
+    }
+
+    // CHECK FOR TRIAL REUSE PREVENTION (for paid licenses)
+    if (siteUrl) {
+      const siteSignature = generateSiteSignature({
+        site_domain: new URL(siteUrl).hostname,
+        site_path: new URL(siteUrl).pathname,
+        abspath: siteUrl
+      });
+
+      // Check if this site already had a trial
+      const existingTrialCheck = await db.query(
+        'SELECT * FROM licenses l JOIN site_usage su ON l.license_key = su.license_key WHERE su.site_signature = $1 AND l.license_type = $2',
+        [siteSignature, 'trial']
+      );
+
+      if (existingTrialCheck.rows.length > 0) {
+        const existingTrial = existingTrialCheck.rows[0];
+        
+        // If trial is still active
+        if (existingTrial.status === 'active' && existingTrial.trial_end_date) {
+          const now = new Date();
+          const trialEnd = new Date(existingTrial.trial_end_date);
+          if (now <= trialEnd) {
+            return res.json({
+              success: false,
+              message: 'A trial is currently active on this site. Trials can only be used once per site.'
+            });
+          }
+        }
+        
+        // If trial was used before (even if expired)
+        return res.json({
+          success: false,
+          message: 'Trial has already been used on this site. Trials can only be used once per site. Please purchase a license to continue using SiteOverlay Pro.'
+        });
+      }
+    }
+
     // Check kill switch
     if (license.kill_switch_enabled === false) {
       return res.json({
