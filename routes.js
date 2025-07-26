@@ -154,16 +154,8 @@ router.post('/validate-license', async (req, res) => {
 
     const license = licenseResult.rows[0];
 
-    // PREVENT TRIAL KEYS IN LICENSE VALIDATION
-    if (licenseKey.startsWith('TRIAL-')) {
-      return res.json({
-        success: false,
-        message: 'Trial keys cannot be used for license activation. Please enter your paid license key, or use the trial request form to start a trial.'
-      });
-    }
-
-    // CHECK FOR TRIAL REUSE PREVENTION (for paid licenses)
-    if (siteUrl) {
+    // CHECK FOR TRIAL REUSE PREVENTION (only for paid licenses on sites that had trials)
+    if (siteUrl && !licenseKey.startsWith('TRIAL-')) {
       const siteSignature = generateSiteSignature({
         site_domain: new URL(siteUrl).hostname,
         site_path: new URL(siteUrl).pathname,
