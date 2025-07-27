@@ -68,7 +68,7 @@ router.get('/test-license-install', async (req, res) => {
       site_url: 'https://test-customer-site.com',
       sales_page: 'https://siteoverlay.24hr.pro',
       license_key: 'SITE-A1B2-C3D4-E5F6',
-      aweber_tags: 'new_license'  // This was missing in the first package
+      aweber_tags: 'new_license,clear-tags'  // ADD clear-tags
     };
 
     // Send to license install webhook
@@ -118,7 +118,7 @@ router.post('/test-renewal-reminder-webhook', async (req, res) => {
       customer_name: 'Marius Nothling',
       installs_remaining: '3',
       sites_active: '2',
-      aweber_tags: 'subscription_ending'
+      aweber_tags: 'subscription_ending,clear-tags'  // ADD clear-tags
     };
 
     // Reuse the same webhook URL (same Pabbly workflow)
@@ -168,7 +168,7 @@ router.get('/test-renewal-reminder', async (req, res) => {
       customer_name: 'Marius Nothling',
       installs_remaining: '3',
       sites_active: '2',
-      aweber_tags: 'subscription_ending'
+      aweber_tags: 'subscription_ending,clear-tags'  // ADD clear-tags
     };
 
     // Reuse the same webhook URL (same Pabbly workflow)

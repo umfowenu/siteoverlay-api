@@ -261,7 +261,7 @@ async function sendLicenseUpdateToPabbly(email, siteLicenseKey, metadata = {}) {
       support_email: process.env.SUPPORT_EMAIL,
       login_instructions: 'Go to WordPress Admin → Settings → SiteOverlay Pro → Enter License Key',
       aweber_tags: [
-        metadata.aweber_tags || 'new_license',
+        metadata.aweber_tags || 'new_license,clear-tags',
         process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro'
       ].join(',')
     };
@@ -282,6 +282,61 @@ async function sendLicenseUpdateToPabbly(email, siteLicenseKey, metadata = {}) {
     return false;
   } catch (error) {
     console.error('❌ License email error:', error);
+    return false;
+  }
+}
+
+/**
+ * RENEWAL REMINDER WEBHOOK: Send renewal reminder data to Pabbly for AWeber integration
+ *
+ * @description Sends renewal reminder events to Pabbly for AWeber automation (existing subscribers)
+ *
+ * BUSINESS LOGIC:
+ *   - Used for subscription renewal reminders (aweber_tags: 'subscription_ending,clear-tags')
+ *   - Updates existing subscriber in AWeber with subscription_ending tag
+ *   - Includes clear-tags for automated tag cleanup
+ *   - Triggers renewal reminder email automation in AWeber
+ *
+ * WEBHOOK USED:
+ *   - PABBLY_WEBHOOK_URL_LICENSE_INSTALL (reuses same webhook for buyer updates)
+ *
+ * AWEBER INTEGRATION:
+ *   - Updates existing subscriber + adds subscription_ending tag
+ *   - Includes clear-tags for automated cleanup
+ *   - Triggers renewal reminder automation in AWeber
+ *
+ * @param {string} email - Customer email address
+ * @param {object} metadata - Additional data (customer_name, installs_remaining, sites_active)
+ * @returns {boolean} - True if webhook sent successfully
+ */
+async function sendRenewalReminderToPabbly(email, metadata = {}) {
+  try {
+    const renewalData = {
+      email: email,
+      customer_name: metadata.customer_name,
+      installs_remaining: metadata.installs_remaining,
+      sites_active: metadata.sites_active,
+      aweber_tags: "subscription_ending,clear-tags"
+    };
+
+    if (process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(renewalData)
+      });
+
+      if (response.ok) {
+        console.log('✅ Renewal reminder sent successfully to:', email);
+        return true;
+      } else {
+        console.error('❌ Renewal reminder failed:', response.status);
+        return false;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('❌ Renewal reminder error:', error);
     return false;
   }
 }
@@ -347,5 +402,6 @@ module.exports = {
   sendToPabbly,              // Keep existing
   sendTrialToPabbly,         // Keep existing  
   sendLicenseUpdateToPabbly, // Keep existing
-  sendPurchaseToPabbly       // ADD new function
+  sendPurchaseToPabbly,      // Keep existing
+  sendRenewalReminderToPabbly  // ADD new function
 }; 
