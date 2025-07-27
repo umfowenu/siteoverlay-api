@@ -318,4 +318,47 @@ async function handlePaymentFailed(invoice) {
   // Handle failed payment (notify customer, etc.)
 }
 
+// ============================================================================
+// TEST ENDPOINTS (TEMPORARY - FOR TESTING ONLY)
+// ============================================================================
+
+router.post('/test-purchase-webhook', async (req, res) => {
+  try {
+    const { sendPurchaseToPabbly } = require('../utils/pabbly-utils');
+    
+    // Send mock data with EXACT values for Pabbly mapping
+    const result = await sendPurchaseToPabbly('marius@shaw.ca', 'professional_5site', {
+      customer_name: 'Marius Nothing',
+      next_renewal: '2025-12-31'
+    });
+    
+    if (result) {
+      res.json({ 
+        success: true, 
+        message: 'Mock purchase data sent to Pabbly webhook successfully',
+        data: {
+          email: 'marius@shaw.ca',
+          customer_name: 'Marius Nothing',
+          license_type: 'professional_5site',
+          next_renewal: '2025-12-31',
+          aweber_tags: 'subscription-active'
+        }
+      });
+    } else {
+      res.json({ 
+        success: false, 
+        message: 'Failed to send to Pabbly webhook' 
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Test webhook error:', error);
+    res.json({ 
+      success: false, 
+      message: 'Error sending test data',
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router; 
