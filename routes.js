@@ -158,6 +158,56 @@ router.post('/test-renewal-reminder-webhook', async (req, res) => {
   }
 });
 
+// GET version for browser testing
+router.get('/test-renewal-reminder', async (req, res) => {
+  try {
+    // Mock renewal reminder data (Stage 3 of purchase flow)
+    const mockRenewalData = {
+      email: 'marius@shaw.ca',
+      customer_name: 'Marius Nothling',
+      installs_remaining: '3',
+      sites_active: '2',
+      aweber_tags: 'subscription_ending'
+    };
+
+    // Reuse the same webhook URL (same Pabbly workflow)
+    if (process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mockRenewalData)
+      });
+
+      if (response.ok) {
+        res.json({ 
+          success: true, 
+          message: 'Mock renewal reminder data sent to Pabbly webhook successfully',
+          data: mockRenewalData
+        });
+      } else {
+        res.json({ 
+          success: false, 
+          message: 'Failed to send to Pabbly webhook',
+          status: response.status
+        });
+      }
+    } else {
+      res.json({ 
+        success: false, 
+        message: 'PABBLY_WEBHOOK_URL_LICENSE_INSTALL not configured' 
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Test renewal reminder webhook error:', error);
+    res.json({ 
+      success: false, 
+      message: 'Error sending test data',
+      error: error.message 
+    });
+  }
+});
+
 // Diagnostic endpoint to check environment and imports
 router.get('/diagnostic', (req, res) => {
   const diagnostics = {
