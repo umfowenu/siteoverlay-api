@@ -118,13 +118,21 @@ router.post('/test-renewal-reminder-webhook', async (req, res) => {
     const mockRenewalData = {
       email: 'marius@shaw.ca',
       customer_name: 'Marius Nothling',
+      
+      // Core license data
       installs_remaining: '3',
       sites_active: '2',
       site_url: 'https://test-customer-site.com',
-      sales_page: 'https://siteoverlay.24hr.pro',
       license_key: 'SITE-A1B2-C3D4-E5F6',
-      next_renewal: '2025-12-31',           // ADD
-      support_email: 'support@ebiz360.ca',  // ADD
+      
+      // Purchase data that must be preserved
+      next_renewal: '2025-12-31',
+      support_email: 'support@ebiz360.ca',
+      sales_page: 'https://siteoverlay.24hr.pro',
+      
+      // License type (if AWeber expects it)
+      license_type: 'professional_5site',
+      
       aweber_tags: 'subscription_ending,clear-tags'
     };
 
@@ -173,13 +181,21 @@ router.get('/test-renewal-reminder', async (req, res) => {
     const mockRenewalData = {
       email: 'marius@shaw.ca',
       customer_name: 'Marius Nothling',
+      
+      // Core license data
       installs_remaining: '3',
       sites_active: '2',
       site_url: 'https://test-customer-site.com',
-      sales_page: 'https://siteoverlay.24hr.pro',
       license_key: 'SITE-A1B2-C3D4-E5F6',
-      next_renewal: '2025-12-31',           // ADD
-      support_email: 'support@ebiz360.ca',  // ADD
+      
+      // Purchase data that must be preserved
+      next_renewal: '2025-12-31',
+      support_email: 'support@ebiz360.ca',
+      sales_page: 'https://siteoverlay.24hr.pro',
+      
+      // License type (if AWeber expects it)
+      license_type: 'professional_5site',
+      
       aweber_tags: 'subscription_ending,clear-tags'
     };
 
