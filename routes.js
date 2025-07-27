@@ -59,30 +59,31 @@ router.get('/test', (req, res) => {
 // Simple test endpoint for license install webhook
 router.get('/test-license-install', async (req, res) => {
   try {
-    // Mock license install data (Stage 2 of purchase flow)
-    const mockLicenseData = {
+    // COMPLETE license install data package with ALL fields
+    const completeLicenseData = {
       email: 'marius@shaw.ca',
       customer_name: 'Marius Nothling',
       installs_remaining: '4',
       sites_active: '1', 
       site_url: 'https://test-customer-site.com',
       sales_page: 'https://siteoverlay.24hr.pro',
-      license_key: 'SITE-A1B2-C3D4-E5F6'
+      license_key: 'SITE-A1B2-C3D4-E5F6',
+      aweber_tags: 'new_license'  // This was missing in the first package
     };
 
-    // Send to new license install webhook
+    // Send to license install webhook
     if (process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL) {
       const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mockLicenseData)
+        body: JSON.stringify(completeLicenseData)
       });
 
       if (response.ok) {
         res.json({ 
           success: true, 
-          message: 'Mock license install data sent to Pabbly webhook successfully',
-          data: mockLicenseData
+          message: 'COMPLETE license install data sent to Pabbly webhook for mapping',
+          data: completeLicenseData
         });
       } else {
         res.json({ 
