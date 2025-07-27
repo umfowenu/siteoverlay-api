@@ -3,10 +3,12 @@
 ## CONSTITUTIONAL RULES (CRITICAL - NEVER VIOLATE)
 
 ### 1. NON-BLOCKING LICENSE SYSTEM
-- License validation must NEVER block core plugin functionality
+- License validation must NEVER block core plugin functionality during page loads
 - All license checks run in background with short timeouts
-- Plugin works fully even if licensing server is down
-- Core overlay functionality is always available
+- Plugin works fully even if licensing server is down (temporarily)
+- **CRITICAL: Background validation MUST disable plugin when license is invalid**
+- **Overlay functionality is disabled when license validation fails**
+- Core overlay functionality is available only when license is valid
 
 ### 2. MODULAR ARCHITECTURE
 - All new features must be separate, optional modules
@@ -21,16 +23,20 @@
 - Cache license status locally for offline operation
 
 ### 4. GRACEFUL DEGRADATION
-- Plugin functions normally without license validation
-- Show warnings/notices only, never block functionality
-- Provide fallback behavior for all license checks
-- Handle API failures silently with local caching
+- Plugin functions normally without license validation (temporarily)
+- Show warnings/notices only, never block functionality during page loads
+- **Background validation results MUST disable plugin when license is invalid**
+- **Overlay is disabled when license state changes to inactive**
+- Handle API failures gracefully but enforce license compliance
+- Provide fallback behavior for temporary connection issues only
 
 ### 5. USER EXPERIENCE PRIORITY
-- Never interrupt user workflow for license issues
+- Never interrupt user workflow for license issues during page loads
 - License prompts are informational only
-- Core features work regardless of license status
+- **Core features work only when license is valid**
+- **Plugin functionality is disabled when license is invalid**
 - Admin notices are dismissible and non-intrusive
+- Background license enforcement happens without user interruption
 
 ## DEVELOPMENT GUIDELINES
 
@@ -78,6 +84,15 @@
 - Handle cron failures gracefully
 - Provide manual trigger options for debugging
 
+### Background License Validation
+- **CRITICAL: Background validation MUST process results and disable plugin when invalid**
+- Use wp_cron for non-blocking license checks
+- Process validation results in background cron jobs
+- **Plugin state MUST change from active to inactive based on validation results**
+- **Overlay functionality MUST be disabled when license is invalid**
+- Handle connection failures gracefully but enforce license compliance
+- Log all license validation results for debugging
+
 ## FILE ORGANIZATION
 
 ### Core Files (DO NOT MODIFY HEAVILY)
@@ -94,6 +109,15 @@
 ### API Files
 - `railway-api/routes.js` - API endpoints
 - Database schema files
+
+## TESTING REQUIREMENTS
+
+### Before Any Commit
+- Test with no internet connection
+- Test with licensing server down
+- Test with invalid license keys
+- Test plugin activation
+
 
 ## TESTING REQUIREMENTS
 
