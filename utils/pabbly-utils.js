@@ -252,18 +252,20 @@ async function sendLicenseUpdateToPabbly(email, siteLicenseKey, metadata = {}) {
   try {
     const pabblyData = {
       email: email,
-      customer_name: metadata.customer_name,
-      site_license_key: siteLicenseKey,
-      site_url: metadata.site_url,
-      license_type: metadata.license_type,
-      installs_remaining: metadata.installs_remaining,
-      sites_active: metadata.sites_active,
-      support_email: process.env.SUPPORT_EMAIL,
-      login_instructions: 'Go to WordPress Admin → Settings → SiteOverlay Pro → Enter License Key',
-      aweber_tags: [
-        metadata.aweber_tags || 'new_license,clear-tags',
-        process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro'
-      ].join(',')
+      customer_name: metadata.customer_name || '',
+      
+      // License install data
+      installs_remaining: metadata.installs_remaining || '',
+      sites_active: metadata.sites_active || '',
+      site_url: metadata.site_url || '',
+      sales_page: process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro',
+      license_key: siteLicenseKey,
+      
+      // PRESERVE purchase data that would otherwise be lost
+      next_renewal: metadata.next_renewal || '',
+      support_email: process.env.SUPPORT_EMAIL || 'support@ebiz360.ca',
+      
+      aweber_tags: "new_license,clear-tags"
     };
     if (process.env.PABBLY_WEBHOOK_URL_LICENSE_UPDATE) {
       const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_UPDATE, {
@@ -313,9 +315,19 @@ async function sendRenewalReminderToPabbly(email, metadata = {}) {
   try {
     const renewalData = {
       email: email,
-      customer_name: metadata.customer_name,
-      installs_remaining: metadata.installs_remaining,
-      sites_active: metadata.sites_active,
+      customer_name: metadata.customer_name || '',
+      
+      // Preserve all existing custom field data
+      installs_remaining: metadata.installs_remaining || '',
+      sites_active: metadata.sites_active || '',
+      site_url: metadata.site_url || '',
+      sales_page: metadata.sales_page || process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro',
+      license_key: metadata.license_key || '',
+      
+      // PRESERVE purchase data that would otherwise be lost
+      next_renewal: metadata.next_renewal || '',
+      support_email: metadata.support_email || process.env.SUPPORT_EMAIL || 'support@ebiz360.ca',
+      
       aweber_tags: "subscription_ending,clear-tags"
     };
 
