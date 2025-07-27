@@ -7,7 +7,7 @@ const {
   getSiteLimitFromLicenseType,
   generateLicenseKey
 } = require('../utils/license-mappings');
-const { sendToPabbly } = require('../utils/pabbly-utils');
+const { sendToPabbly, sendPurchaseToPabbly } = require('../utils/pabbly-utils');
 
 // Payment processor integrations
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -134,13 +134,10 @@ async function handleCheckoutCompleted(session) {
       'Initial purchase via Stripe checkout'
     ]);
 
-    // Send to Pabbly/AWeber
-    await sendToPabbly(customer.email, licenseKey, licenseType, {
+    // Send purchase data to Pabbly/AWeber
+    await sendPurchaseToPabbly(customer.email, licenseType, {
       customer_name: customer.name || session.customer_details?.name,
-      purchase_amount: (session.amount_total / 100).toString(),
-      currency: session.currency?.toUpperCase() || 'USD',
-      payment_processor: 'stripe',
-      renewal_date: renewalDate
+      next_renewal: renewalDate ? renewalDate.toISOString().split('T')[0] : 'Never'
     });
 
     console.log('✅ Stripe purchase processed:', licenseKey);

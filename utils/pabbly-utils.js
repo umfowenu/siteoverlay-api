@@ -286,8 +286,66 @@ async function sendLicenseUpdateToPabbly(email, siteLicenseKey, metadata = {}) {
   }
 }
 
+/**
+ * PURCHASE WEBHOOK: Send purchase data to Pabbly for AWeber integration
+ *
+ * @description Sends purchase events to Pabbly for AWeber automation (new subscribers)
+ *
+ * BUSINESS LOGIC:
+ *   - Used for new paid license purchases (aweber_tags: 'subscription-active')
+ *   - Creates new subscriber in AWeber with subscription-active tag
+ *   - Tags are comma-separated: "subscription-active,https://siteoverlay.24hr.pro"
+ *   - Sales page URL included for dynamic email content
+ *
+ * WEBHOOK USED:
+ *   - PABBLY_WEBHOOK_URL_PURCHASE (new subscriber registration)
+ *
+ * AWEBER INTEGRATION:
+ *   - Creates new subscriber + adds subscription-active tag
+ *   - Triggers welcome email automation in AWeber
+ *
+ * @param {string} email - Customer email address
+ * @param {string} licenseType - License type (professional, annual_unlimited, lifetime_unlimited)
+ * @param {object} metadata - Additional data (customer_name, next_renewal)
+ * @returns {boolean} - True if webhook sent successfully
+ */
+async function sendPurchaseToPabbly(email, licenseType, metadata = {}) {
+  try {
+    const purchaseData = {
+      email: email,
+      customer_name: metadata.customer_name || '',
+      support_email: process.env.SUPPORT_EMAIL || 'support@ebiz360.ca',
+      sales_page: process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro',
+      next_renewal: metadata.next_renewal || 'Unknown',
+      license_type: licenseType,
+      aweber_tags: "subscription-active"
+    };
+
+    if (process.env.PABBLY_WEBHOOK_URL_PURCHASE) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_PURCHASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(purchaseData)
+      });
+
+      if (response.ok) {
+        console.log('✅ Purchase webhook sent successfully to:', email);
+        return true;
+      } else {
+        console.error('❌ Purchase webhook failed:', response.status);
+        return false;
+      }
+    }
+    return false;
+  } catch (error) {
+    console.error('❌ Purchase webhook error:', error);
+    return false;
+  }
+}
+
 module.exports = {
-  sendToPabbly,      // Keep existing for purchases
-  sendTrialToPabbly, // For trials
-  sendLicenseUpdateToPabbly // For paid license email delivery
+  sendToPabbly,              // Keep existing
+  sendTrialToPabbly,         // Keep existing  
+  sendLicenseUpdateToPabbly, // Keep existing
+  sendPurchaseToPabbly       // ADD new function
 }; 
