@@ -300,8 +300,8 @@ async function sendLicenseUpdateToPabbly(email, siteLicenseKey, metadata = {}) {
       
       aweber_tags: "new_license,clear-tags"
     };
-    if (process.env.PABBLY_WEBHOOK_URL_LICENSE_UPDATE) {
-      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_UPDATE, {
+    if (process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pabblyData)

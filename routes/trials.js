@@ -320,7 +320,7 @@ router.post('/check-expiring-trials', async (req, res) => {
  *
  * INTEGRATION:
  *   - Uses sendLicenseUpdateToPabbly() for email delivery
- *   - Uses PABBLY_WEBHOOK_URL_LICENSE_UPDATE webhook
+ *   - Uses PABBLY_WEBHOOK_URL_LICENSE_INSTALL webhook
  *
  * ERROR HANDLING:
  *   - No active subscription found → "Please purchase or request a trial"
