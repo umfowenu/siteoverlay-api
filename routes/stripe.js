@@ -361,4 +361,55 @@ router.post('/test-purchase-webhook', async (req, res) => {
   }
 });
 
+router.post('/test-license-install-webhook', async (req, res) => {
+  try {
+    // Mock license install data (Stage 2 of purchase flow)
+    const mockLicenseData = {
+      email: 'marius@shaw.ca',
+      customer_name: 'Marius Nothling',
+      installs_remaining: '4',
+      sites_active: '1', 
+      site_url: 'https://test-customer-site.com',
+      sales_page: 'https://siteoverlay.24hr.pro',
+      license_key: 'SITE-A1B2-C3D4-E5F6'
+    };
+
+    // Send to new license install webhook
+    if (process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL) {
+      const response = await fetch(process.env.PABBLY_WEBHOOK_URL_LICENSE_INSTALL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mockLicenseData)
+      });
+
+      if (response.ok) {
+        res.json({ 
+          success: true, 
+          message: 'Mock license install data sent to Pabbly webhook successfully',
+          data: mockLicenseData
+        });
+      } else {
+        res.json({ 
+          success: false, 
+          message: 'Failed to send to Pabbly webhook',
+          status: response.status
+        });
+      }
+    } else {
+      res.json({ 
+        success: false, 
+        message: 'PABBLY_WEBHOOK_URL_LICENSE_INSTALL not configured' 
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Test license install webhook error:', error);
+    res.json({ 
+      success: false, 
+      message: 'Error sending test data',
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router; 
