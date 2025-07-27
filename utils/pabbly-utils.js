@@ -261,7 +261,7 @@ async function sendLicenseUpdateToPabbly(email, siteLicenseKey, metadata = {}) {
       support_email: process.env.SUPPORT_EMAIL,
       login_instructions: 'Go to WordPress Admin → Settings → SiteOverlay Pro → Enter License Key',
       aweber_tags: [
-        metadata.aweber_tags || 'site-license-generated,license-email-sent',
+        metadata.aweber_tags || 'new_license',
         process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro'
       ].join(',')
     };
