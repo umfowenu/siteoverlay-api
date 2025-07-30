@@ -10,7 +10,9 @@ const {
 const { sendToPabbly, sendPurchaseToPabbly } = require('../utils/pabbly-utils');
 
 // Payment processor integrations
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+const stripeSecretKey = isTestMode ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY;
+const stripe = require('stripe')(stripeSecretKey);
 
 // ============================================================================
 // STRIPE WEBHOOK HANDLING
@@ -21,8 +23,9 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    console.log('✅ Stripe webhook verified:', event.type);
+    const webhookSecret = isTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET;
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    console.log(`🔧 Stripe webhook verified (${isTestMode ? 'TEST' : 'LIVE'} mode):`, event.type);
   } catch (err) {
     console.error('❌ Stripe webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -134,11 +137,16 @@ async function handleCheckoutCompleted(session) {
       'Initial purchase via Stripe checkout'
     ]);
 
-    // Send purchase data to Pabbly/AWeber
-    await sendPurchaseToPabbly(customer.email, licenseType, {
-      customer_name: customer.name || session.customer_details?.name,
-      next_renewal: renewalDate ? renewalDate.toISOString().split('T')[0] : 'Never'
-    });
+    // Send purchase data to Pabbly/AWeber (skip in test mode)
+    if (!isTestMode) {
+      await sendPurchaseToPabbly(customer.email, licenseType, {
+        customer_name: customer.name || session.customer_details?.name,
+        next_renewal: renewalDate ? renewalDate.toISOString().split('T')[0] : 'Never'
+      });
+      console.log('✅ Purchase data sent to Pabbly (live mode)');
+    } else {
+      console.log('🧪 Test mode: Skipping Pabbly webhook (no emails sent)');
+    }
 
     console.log('✅ Stripe purchase processed:', licenseKey);
 
