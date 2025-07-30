@@ -56,6 +56,75 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Debug endpoint for license validation
+router.post('/debug-license', async (req, res) => {
+  try {
+    const { licenseKey } = req.body;
+    
+    if (!licenseKey) {
+      return res.json({
+        success: false,
+        message: 'License key is required'
+      });
+    }
+
+    console.log('🔍 DEBUG: Checking license key:', licenseKey);
+
+    let licenseResult;
+    let queryUsed;
+
+    // Check if it's a site-specific license key (starts with SITE-)
+    if (licenseKey.startsWith('SITE-')) {
+      console.log('🔍 DEBUG: Validating site-specific license key');
+      
+      queryUsed = 'site_usage JOIN licenses';
+      // Query site_usage table joined with licenses table for full license info
+      licenseResult = await db.query(`
+        SELECT l.*, su.site_license_key, su.site_url, su.site_domain 
+        FROM site_usage su 
+        JOIN licenses l ON su.license_key = l.license_key 
+        WHERE su.site_license_key = $1 AND su.status = 'active'
+      `, [licenseKey]);
+      
+    } else {
+      console.log('🔍 DEBUG: Validating master license key');
+      
+      queryUsed = 'licenses table only';
+      // Query licenses table for master license keys
+      licenseResult = await db.query(
+        'SELECT * FROM licenses WHERE license_key = $1',
+        [licenseKey]
+      );
+    }
+
+    console.log('🔍 DEBUG: License validation result:', {
+      licenseKey,
+      found: licenseResult.rows.length > 0,
+      table: licenseKey.startsWith('SITE-') ? 'site_usage' : 'licenses',
+      rowCount: licenseResult.rows.length
+    });
+
+    res.json({
+      success: true,
+      debug: {
+        licenseKey,
+        isSiteSpecific: licenseKey.startsWith('SITE-'),
+        queryUsed,
+        found: licenseResult.rows.length > 0,
+        rowCount: licenseResult.rows.length,
+        licenseData: licenseResult.rows[0] || null
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ DEBUG license error:', error);
+    res.json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // PRODUCTION TEST ENDPOINTS - Keep for system maintenance and debugging
 router.get('/test-license-install', async (req, res) => {
   try {
@@ -457,6 +526,13 @@ router.post('/validate-license', async (req, res) => {
         site_domain: new URL(siteUrl).hostname,
         site_path: new URL(siteUrl).pathname,
         abspath: siteUrl
+      });
+
+      console.log('🔍 Site registration check:', {
+        siteUrl,
+        siteSignature,
+        licenseKey,
+        isSiteSpecific: licenseKey.startsWith('SITE-')
       });
 
       // Check if site already registered
