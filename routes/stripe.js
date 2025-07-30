@@ -137,13 +137,15 @@ async function handleCheckoutCompleted(session) {
       'Initial purchase via Stripe checkout'
     ]);
 
-    // Send purchase data to Pabbly/AWeber (skip in test mode)
-    if (!isTestMode) {
+    // Send purchase data to Pabbly/AWeber (skip in test mode unless override enabled)
+    const allowEmailsInTestMode = process.env.STRIPE_TEST_MODE_ALLOW_EMAILS === 'true';
+
+    if (!isTestMode || (isTestMode && allowEmailsInTestMode)) {
       await sendPurchaseToPabbly(customer.email, licenseType, {
         customer_name: customer.name || session.customer_details?.name,
         next_renewal: renewalDate ? renewalDate.toISOString().split('T')[0] : 'Never'
       });
-      console.log('✅ Purchase data sent to Pabbly (live mode)');
+      console.log(`✅ Purchase data sent to Pabbly (${isTestMode ? 'TEST mode with emails' : 'LIVE mode'})`);
     } else {
       console.log('🧪 Test mode: Skipping Pabbly webhook (no emails sent)');
     }
