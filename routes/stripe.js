@@ -80,15 +80,25 @@ async function handleCheckoutCompleted(session) {
     
     // Calculate renewal date
     let renewalDate = null;
-    if (session.subscription) {
+
+    // Lifetime purchases never renew (one-time payment)
+    if (licenseType === 'lifetime_unlimited') {
+      renewalDate = null; // Will show "Never"
+    } 
+    // All other purchases are subscriptions and need renewal dates
+    else if (session.subscription) {
       try {
-        // Get subscription details from Stripe
+        // Get exact renewal date from Stripe subscription
         const subscription = await stripe.subscriptions.retrieve(session.subscription);
-        renewalDate = new Date(subscription.current_period_end * 1000); // Convert from Unix timestamp
+        renewalDate = new Date(subscription.current_period_end * 1000);
       } catch (error) {
-        console.log('Could not retrieve subscription details, using default 30 days');
-        renewalDate = new Date();
-        renewalDate.setMonth(renewalDate.getMonth() + 1);
+        console.log('Could not retrieve subscription details, using default based on license type');
+        // Fallback renewal dates based on license type
+        if (licenseType === 'annual_unlimited') {
+          renewalDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+        } else if (licenseType === '5_site_license') {
+          renewalDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 1 month (monthly subscription)
+        }
       }
     }
 
