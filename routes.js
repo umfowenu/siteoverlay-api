@@ -343,10 +343,35 @@ router.post('/validate-license', async (req, res) => {
     }
 
     // Get license from database
-    const licenseResult = await db.query(
-      'SELECT * FROM licenses WHERE license_key = $1',
-      [licenseKey]
-    );
+    let licenseResult;
+
+    // Check if it's a site-specific license key (starts with SITE-)
+    if (licenseKey.startsWith('SITE-')) {
+      console.log('🔍 Validating site-specific license key');
+      
+      // Query site_usage table joined with licenses table for full license info
+      licenseResult = await db.query(`
+        SELECT l.*, su.site_license_key, su.site_url, su.site_domain 
+        FROM site_usage su 
+        JOIN licenses l ON su.license_key = l.license_key 
+        WHERE su.site_license_key = $1 AND su.status = 'active'
+      `, [licenseKey]);
+      
+    } else {
+      console.log('🔍 Validating master license key');
+      
+      // Query licenses table for master license keys
+      licenseResult = await db.query(
+        'SELECT * FROM licenses WHERE license_key = $1',
+        [licenseKey]
+      );
+    }
+
+    console.log('🔍 License validation result:', {
+      licenseKey,
+      found: licenseResult.rows.length > 0,
+      table: licenseKey.startsWith('SITE-') ? 'site_usage' : 'licenses'
+    });
 
     if (licenseResult.rows.length === 0) {
       return res.json({
