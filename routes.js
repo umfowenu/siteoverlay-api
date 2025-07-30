@@ -257,6 +257,43 @@ router.post('/test-purchase-simple', async (req, res) => {
   }
 });
 
+// Test endpoint for email updater with corrected tags
+router.post('/test-email-updater-custom', async (req, res) => {
+  try {
+    const { sendLicenseUpdateToPabbly } = require('./utils/pabbly-utils');
+    
+    // Send email updater data with corrected tags
+    const result = await sendLicenseUpdateToPabbly('marius@shaw.ca', 'SITE-A1B2-C3D4-E5F6', {
+      customer_name: 'Marius Nothling',
+      site_url: 'https://test-customer-site.com',
+      installs_remaining: '4',
+      sites_active: '1',
+      next_renewal: '2025-12-31',
+      custom_tags: 'new_license,subscription_ending,clear-tags'  // CORRECTED: new_license instead of subscription-active
+    });
+    
+    if (result) {
+      res.json({ 
+        success: true, 
+        message: 'Email updater data with corrected tags sent successfully',
+        webhook: 'PABBLY_WEBHOOK_URL_LICENSE_INSTALL',
+        tags_sent: 'new_license,subscription_ending,clear-tags'
+      });
+    } else {
+      res.json({ 
+        success: false, 
+        message: 'Failed to send email updater data' 
+      });
+    }
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      message: 'Error sending email updater data', 
+      error: error.message 
+    });
+  }
+});
+
 // Diagnostic endpoint to check environment and imports
 router.get('/diagnostic', (req, res) => {
   const diagnostics = {
