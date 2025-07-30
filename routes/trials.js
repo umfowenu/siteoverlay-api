@@ -341,11 +341,15 @@ router.post('/request-paid-license', async (req, res) => {
         message: 'Full name, email, and domain are required'
       });
     }
+    // Debug logging to help troubleshoot
+    console.log('🔍 License validation for email:', email);
+    console.log('🔍 Looking for license types: 5_site_license, annual_unlimited, lifetime_unlimited');
+    
     // 1. Find active subscription by email
     const subscription = await db.query(`
       SELECT * FROM licenses 
       WHERE customer_email = $1 
-      AND (license_type = 'monthly' OR license_type = 'annual' OR license_type = 'lifetime')
+      AND (license_type = '5_site_license' OR license_type = 'annual_unlimited' OR license_type = 'lifetime_unlimited')
       AND status = 'active'
       AND kill_switch_enabled = true
     `, [email]);
