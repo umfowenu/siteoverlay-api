@@ -90,20 +90,43 @@ async function handleCheckoutCompleted(session) {
       try {
         // Get exact renewal date from Stripe subscription
         const subscription = await stripe.subscriptions.retrieve(session.subscription);
-        renewalDate = new Date(subscription.current_period_end * 1000);
+        if (subscription.current_period_end && !isNaN(subscription.current_period_end)) {
+          renewalDate = new Date(subscription.current_period_end * 1000);
+        } else {
+          throw new Error('Invalid subscription period end');
+        }
       } catch (error) {
-        console.log('Could not retrieve subscription details, using default based on license type');
-        // Fallback renewal dates based on license type
+        console.log('Could not retrieve subscription details, using default based on license type:', error.message);
+        // Safe fallback renewal dates
+        const now = new Date();
         if (licenseType === 'annual_unlimited') {
-          renewalDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+          renewalDate = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000)); // 1 year
         } else if (licenseType === '5_site_license') {
-          renewalDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 1 month (monthly subscription)
+          renewalDate = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)); // 1 month
+        } else {
+          renewalDate = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)); // Default 1 month
         }
       }
     }
 
+    // Add validation to ensure renewalDate is valid
+    if (renewalDate && (isNaN(renewalDate.getTime()) || renewalDate.getTime() <= 0)) {
+      console.log('Invalid renewal date detected, using fallback');
+      const now = new Date();
+      renewalDate = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000)); // 1 month fallback
+    }
+
     // Generate license key
     const licenseKey = generateLicenseKey();
+
+    // Debug logging to catch future issues
+    console.log('🔍 Debug - License data before insert:', {
+      licenseKey,
+      licenseType,
+      customerEmail: customer.email,
+      renewalDate: renewalDate ? renewalDate.toISOString() : 'null',
+      subscriptionId: session.subscription || null
+    });
 
     // Insert license
     const licenseResult = await db.query(`
