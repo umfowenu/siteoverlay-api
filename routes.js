@@ -237,6 +237,26 @@ router.get('/test-renewal-reminder', async (req, res) => {
   }
 });
 
+// Simple purchase test endpoint for debugging
+router.post('/test-purchase-simple', async (req, res) => {
+  try {
+    const { sendPurchaseToPabbly } = require('./utils/pabbly-utils');
+    
+    const result = await sendPurchaseToPabbly('marius@shaw.ca', 'professional_5site', {
+      customer_name: 'Marius Nothling',
+      next_renewal: '2025-12-31'
+    });
+    
+    res.json({ 
+      success: result, 
+      message: result ? 'Purchase data sent successfully' : 'Failed to send purchase data',
+      webhook: 'PABBLY_WEBHOOK_URL_PURCHASE'
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
 // Diagnostic endpoint to check environment and imports
 router.get('/diagnostic', (req, res) => {
   const diagnostics = {
