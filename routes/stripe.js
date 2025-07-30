@@ -80,8 +80,16 @@ async function handleCheckoutCompleted(session) {
     
     // Calculate renewal date
     let renewalDate = null;
-    if (licenseType.includes('annual')) {
-      renewalDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+    if (session.subscription) {
+      try {
+        // Get subscription details from Stripe
+        const subscription = await stripe.subscriptions.retrieve(session.subscription);
+        renewalDate = new Date(subscription.current_period_end * 1000); // Convert from Unix timestamp
+      } catch (error) {
+        console.log('Could not retrieve subscription details, using default 30 days');
+        renewalDate = new Date();
+        renewalDate.setMonth(renewalDate.getMonth() + 1);
+      }
     }
 
     // Generate license key
@@ -143,7 +151,7 @@ async function handleCheckoutCompleted(session) {
     if (!isTestMode || (isTestMode && allowEmailsInTestMode)) {
       await sendPurchaseToPabbly(customer.email, licenseType, {
         customer_name: customer.name || session.customer_details?.name,
-        next_renewal: renewalDate ? renewalDate.toISOString().split('T')[0] : 'Never'
+        next_renewal: renewalDate ? renewalDate.toISOString().split('T')[0] : 'One-time payment'
       });
       console.log(`✅ Purchase data sent to Pabbly (${isTestMode ? 'TEST mode with emails' : 'LIVE mode'})`);
     } else {
