@@ -426,14 +426,23 @@ router.post('/validate-license', async (req, res) => {
         WHERE su.site_license_key = $1 AND su.status = 'active'
       `, [licenseKey]);
       
-    } else {
-      console.log('🔍 Validating master license key');
+    } else if (licenseKey.startsWith('TRIAL-')) {
+      console.log('🔍 Validating trial license key');
       
-      // Query licenses table for master license keys
+      // Allow trial keys to validate from licenses table
       licenseResult = await db.query(
         'SELECT * FROM licenses WHERE license_key = $1',
         [licenseKey]
       );
+      
+    } else {
+      console.log('🔍 Master license key - NOT VALID for plugin usage');
+      
+      // REJECT master keys for plugin usage - they should only be used for site-specific license generation
+      return res.json({
+        success: false,
+        message: 'Master license keys cannot be used directly for plugin activation. Please request a site-specific license from the plugin settings.'
+      });
     }
 
     console.log('🔍 License validation result:', {
