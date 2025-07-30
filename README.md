@@ -125,3 +125,17 @@ For technical support or questions about this implementation:
 **Status**: âœ… Complete and Ready for Deployment
 **Last Updated**: July 2025
 **Version**: 2.0.0
+
+## 📚 Documentation
+
+### Complete Documentation
+- [Complete System Documentation](docs/COMPLETE_SYSTEM_DOCUMENTATION.md) - Full system details, architecture, and procedures
+- [Quick Reference Guide](docs/QUICK_REFERENCE_GUIDE.md) - Essential commands and troubleshooting
+
+### Key Resources
+- **Railway API**: https://siteoverlay-api-production.up.railway.app
+- **Plugin Repository**: https://github.com/umfowenu/siteoverlay-pro
+- **Sales Page**: https://siteoverlay.24hr.pro
+
+### Emergency Contact
+For system issues, check the troubleshooting guide first, then escalate according to the support procedures in the documentation.
