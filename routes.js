@@ -56,7 +56,7 @@ router.get('/test', (req, res) => {
   });
 });
 
-// Simple test endpoint for license install webhook
+// PRODUCTION TEST ENDPOINTS - Keep for system maintenance and debugging
 router.get('/test-license-install', async (req, res) => {
   try {
     // COMPLETE license install data package with ALL fields
@@ -111,7 +111,7 @@ router.get('/test-license-install', async (req, res) => {
   }
 });
 
-// Test endpoint for renewal reminder webhook
+// PRODUCTION TEST ENDPOINTS - Keep for system maintenance and debugging
 router.post('/test-renewal-reminder-webhook', async (req, res) => {
   try {
     // Mock renewal reminder data (Stage 3 of purchase flow)
@@ -174,7 +174,7 @@ router.post('/test-renewal-reminder-webhook', async (req, res) => {
   }
 });
 
-// GET version for browser testing
+// PRODUCTION TEST ENDPOINTS - Keep for system maintenance and debugging
 router.get('/test-renewal-reminder', async (req, res) => {
   try {
     // Mock renewal reminder data (Stage 3 of purchase flow)
@@ -237,7 +237,7 @@ router.get('/test-renewal-reminder', async (req, res) => {
   }
 });
 
-// Simple purchase test endpoint for debugging
+// PRODUCTION TEST ENDPOINTS - Keep for system maintenance and debugging
 router.post('/test-purchase-simple', async (req, res) => {
   try {
     const { sendPurchaseToPabbly } = require('./utils/pabbly-utils');
@@ -257,42 +257,7 @@ router.post('/test-purchase-simple', async (req, res) => {
   }
 });
 
-// Test endpoint for email updater with corrected tags
-router.post('/test-email-updater-custom', async (req, res) => {
-  try {
-    const { sendLicenseUpdateToPabbly } = require('./utils/pabbly-utils');
-    
-    // Send email updater data with corrected tags
-    const result = await sendLicenseUpdateToPabbly('marius@shaw.ca', 'SITE-A1B2-C3D4-E5F6', {
-      customer_name: 'Marius Nothling',
-      site_url: 'https://test-customer-site.com',
-      installs_remaining: '4',
-      sites_active: '1',
-      next_renewal: '2025-12-31',
-      custom_tags: 'new_license,subscription_ending,clear-tags'  // CORRECTED: new_license instead of subscription-active
-    });
-    
-    if (result) {
-      res.json({ 
-        success: true, 
-        message: 'Email updater data with corrected tags sent successfully',
-        webhook: 'PABBLY_WEBHOOK_URL_LICENSE_INSTALL',
-        tags_sent: 'new_license,subscription_ending,clear-tags'
-      });
-    } else {
-      res.json({ 
-        success: false, 
-        message: 'Failed to send email updater data' 
-      });
-    }
-  } catch (error) {
-    res.json({ 
-      success: false, 
-      message: 'Error sending email updater data', 
-      error: error.message 
-    });
-  }
-});
+
 
 // Diagnostic endpoint to check environment and imports
 router.get('/diagnostic', (req, res) => {
