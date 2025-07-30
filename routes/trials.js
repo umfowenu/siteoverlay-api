@@ -43,7 +43,7 @@ router.post('/start-trial', async (req, res) => {
         data: {
           license_key: existingLicense.license_key,
           trial_expires: existingLicense.trial_end_date,
-          sites_remaining: Math.max(0, 5 - 0)
+          sites_remaining: Math.max(0, 1 - 0)
         }
       });
     }
@@ -65,7 +65,7 @@ router.post('/start-trial', async (req, res) => {
     `, [
       trialLicenseKey, 'trial', 'trial', email, full_name,
       new Date(), trialExpires, null, null, null, 0, 'trial',
-      'email_trial_request', 5, true, true
+      'email_trial_request', 1, true, true
     ]);
 
     // Record trial in purchase history
@@ -104,7 +104,7 @@ router.post('/start-trial', async (req, res) => {
       data: {
         license_key: trialLicenseKey,
         trial_expires: trialExpires.toISOString(),
-        sites_remaining: 5,
+        sites_remaining: 1,
         customer_name: full_name,
         customer_email: email
       }
@@ -154,7 +154,7 @@ router.post('/request-trial', async (req, res) => {
         data: {
           license_key: existingLicense.license_key,
           trial_expires: existingLicense.trial_end_date,
-          sites_remaining: Math.max(0, 5 - 0)
+          sites_remaining: Math.max(0, 1 - 0)
         }
       });
     }
@@ -176,7 +176,7 @@ router.post('/request-trial', async (req, res) => {
     `, [
       trialLicenseKey, 'trial', 'trial', email, full_name,
       new Date(), trialExpires, null, null, null, 0, 'trial',
-      'wordpress_plugin_trial', 5, true, true
+      'wordpress_plugin_trial', 1, true, true
     ]);
 
     // Record trial in purchase history
@@ -215,7 +215,7 @@ router.post('/request-trial', async (req, res) => {
       data: {
         license_key: trialLicenseKey,
         trial_expires: trialExpires.toISOString(),
-        sites_remaining: 5,
+        sites_remaining: 1,
         customer_name: full_name,
         customer_email: email
       }

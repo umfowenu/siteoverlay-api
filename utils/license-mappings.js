@@ -38,6 +38,7 @@ function getLicenseTypeFromWarriorPlusProduct(productId) {
 function getSiteLimitFromLicenseType(licenseType) {
   switch (licenseType) {
     case 'trial':
+      return 1; // Trial limited to 1 site only
     case '5_site_license':
       return 5;
     case 'annual_unlimited':
