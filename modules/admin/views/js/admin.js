@@ -683,7 +683,7 @@ class AdminDashboard {
                     <td><span class="status-badge ${p.kill_switch_enabled ? 'status-active' : 'status-inactive'}">${killStatus}</span></td>
                     <td>${siteLimit}</td>
                     <td>${p.sites_used}</td>
-                    <td>$${(p.amount_paid || 0).toFixed(2)}</td>
+                    <td>$${parseFloat(p.amount_paid || 0).toFixed(2)}</td>
                     <td>${createdDate}</td>
                     <td>${renewalDate}</td>
                     <td>
