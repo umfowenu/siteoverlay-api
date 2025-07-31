@@ -21,4 +21,11 @@ router.post('/enable-license', adminAuth, LicenseController.enableLicense);
 router.post('/customer-data', adminAuth, CustomerController.getCustomerData);
 router.post('/kill-customer', adminAuth, CustomerController.killCustomerLicenses);
 
+// New data retrieval routes
+router.get('/purchasers', adminAuth, LicenseController.getAllPurchasers);
+router.get('/trials', adminAuth, LicenseController.getAllTrials);
+
+// New license control route
+router.post('/toggle-status', adminAuth, LicenseController.toggleLicenseStatus);
+
 module.exports = router; 

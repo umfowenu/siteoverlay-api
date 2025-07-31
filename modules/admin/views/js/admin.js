@@ -5,6 +5,12 @@ class AdminDashboard {
         this.init();
     }
 
+    // Add these new variables at the top
+    currentPurchasersSort = { column: 'created_at', direction: 'desc' };
+    currentTrialsSort = { column: 'created_at', direction: 'desc' };
+    purchasersData = [];
+    trialsData = [];
+
     init() {
         this.bindEvents();
         this.loadDashboard();
@@ -74,6 +80,8 @@ class AdminDashboard {
             if (data.success) {
                 this.updateStats(data.stats);
                 this.updateRecentLicenses(data.recent_licenses);
+                this.loadPurchasers(); // Auto-load purchasers
+                this.loadTrials();     // Auto-load trials
             } else {
                 this.showError('Failed to load dashboard data');
             }
@@ -578,6 +586,240 @@ class AdminDashboard {
             hour: '2-digit',
             minute: '2-digit'
         });
+    }
+
+    // Load all purchasers
+    async loadPurchasers(sortBy = null, sortOrder = null) {
+        try {
+            const sort = sortBy || this.currentPurchasersSort.column;
+            const order = sortOrder || this.currentPurchasersSort.direction;
+            
+            const response = await fetch(`/admin/api/purchasers?admin_key=${this.adminKey}&sort_by=${sort}&sort_order=${order}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.purchasersData = data.purchasers;
+                this.currentPurchasersSort = { column: sort, direction: order };
+                this.displayPurchasersTable(data.purchasers, sort, order);
+            }
+        } catch (error) {
+            console.error('Error loading purchasers:', error);
+        }
+    }
+
+    // Load all trials
+    async loadTrials(sortBy = null, sortOrder = null) {
+        try {
+            const sort = sortBy || this.currentTrialsSort.column;
+            const order = sortOrder || this.currentTrialsSort.direction;
+            
+            const response = await fetch(`/admin/api/trials?admin_key=${this.adminKey}&sort_by=${sort}&sort_order=${order}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.trialsData = data.trials;
+                this.currentTrialsSort = { column: sort, direction: order };
+                this.displayTrialsTable(data.trials, sort, order);
+            }
+        } catch (error) {
+            console.error('Error loading trials:', error);
+        }
+    }
+
+    // Display purchasers table
+    displayPurchasersTable(purchasers, sortColumn, sortDirection) {
+        const container = document.getElementById('purchasersTable');
+        
+        if (!purchasers || purchasers.length === 0) {
+            container.innerHTML = '<p>No purchasers found.</p>';
+            return;
+        }
+
+        let html = `
+            <table class="sortable-table">
+                <thead>
+                    <tr>
+                        <th onclick="adminDashboard.sortPurchasers('license_key')" class="${sortColumn === 'license_key' ? 'sort-' + sortDirection : ''}">License Key</th>
+                        <th onclick="adminDashboard.sortPurchasers('license_type')" class="${sortColumn === 'license_type' ? 'sort-' + sortDirection : ''}">Type</th>
+                        <th onclick="adminDashboard.sortPurchasers('customer_name')" class="${sortColumn === 'customer_name' ? 'sort-' + sortDirection : ''}">Customer</th>
+                        <th onclick="adminDashboard.sortPurchasers('customer_email')" class="${sortColumn === 'customer_email' ? 'sort-' + sortDirection : ''}">Email</th>
+                        <th onclick="adminDashboard.sortPurchasers('status')" class="${sortColumn === 'status' ? 'sort-' + sortDirection : ''}">Status</th>
+                        <th onclick="adminDashboard.sortPurchasers('kill_switch_enabled')" class="${sortColumn === 'kill_switch_enabled' ? 'sort-' + sortDirection : ''}">Kill Switch</th>
+                        <th onclick="adminDashboard.sortPurchasers('site_limit')" class="${sortColumn === 'site_limit' ? 'sort-' + sortDirection : ''}">Sites Limit</th>
+                        <th onclick="adminDashboard.sortPurchasers('sites_used')" class="${sortColumn === 'sites_used' ? 'sort-' + sortDirection : ''}">Sites Used</th>
+                        <th onclick="adminDashboard.sortPurchasers('amount_paid')" class="${sortColumn === 'amount_paid' ? 'sort-' + sortDirection : ''}">Revenue</th>
+                        <th onclick="adminDashboard.sortPurchasers('created_at')" class="${sortColumn === 'created_at' ? 'sort-' + sortDirection : ''}">Created</th>
+                        <th onclick="adminDashboard.sortPurchasers('renewal_date')" class="${sortColumn === 'renewal_date' ? 'sort-' + sortDirection : ''}">Renewal</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        purchasers.forEach(p => {
+            const statusClass = p.status === 'active' ? 'status-active' : 'status-inactive';
+            const killStatus = p.kill_switch_enabled ? 'Enabled' : 'KILLED';
+            const siteLimit = p.site_limit === -1 ? 'Unlimited' : p.site_limit;
+            const createdDate = new Date(p.created_at).toLocaleDateString();
+            const renewalDate = p.renewal_date ? new Date(p.renewal_date).toLocaleDateString() : 'Never';
+            
+            html += `
+                <tr>
+                    <td><span class="license-code">${p.license_key}</span></td>
+                    <td>${p.license_type}</td>
+                    <td>${p.customer_name || 'N/A'}</td>
+                    <td>${p.customer_email}</td>
+                    <td><span class="status-badge ${statusClass}">${p.status}</span></td>
+                    <td><span class="status-badge ${p.kill_switch_enabled ? 'status-active' : 'status-inactive'}">${killStatus}</span></td>
+                    <td>${siteLimit}</td>
+                    <td>${p.sites_used}</td>
+                    <td>$${(p.amount_paid || 0).toFixed(2)}</td>
+                    <td>${createdDate}</td>
+                    <td>${renewalDate}</td>
+                    <td>
+                        <button class="mini-btn btn-xs-info" onclick="adminDashboard.viewCustomer('${p.customer_email}')">View</button>
+                        ${p.status === 'active' ? 
+                            `<button class="mini-btn btn-xs-danger" onclick="adminDashboard.toggleLicenseStatus('${p.license_key}', 'disable')">Disable</button>` :
+                            `<button class="mini-btn btn-xs-success" onclick="adminDashboard.toggleLicenseStatus('${p.license_key}', 'enable')">Enable</button>`
+                        }
+                        ${p.kill_switch_enabled ? 
+                            `<button class="mini-btn btn-xs-danger" onclick="adminDashboard.toggleKillSwitch('${p.license_key}', 'disable')">Kill</button>` :
+                            `<button class="mini-btn btn-xs-success" onclick="adminDashboard.toggleKillSwitch('${p.license_key}', 'enable')">Revive</button>`
+                        }
+                        <button class="mini-btn btn-xs-warning" onclick="adminDashboard.showUpdateInstallsModal('${p.license_key}', ${p.site_limit})">Sites</button>
+                        <button class="mini-btn btn-xs-success" onclick="adminDashboard.convertToLifetime('${p.license_key}')">Lifetime</button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    // Display trials table
+    displayTrialsTable(trials, sortColumn, sortDirection) {
+        const container = document.getElementById('trialsTable');
+        
+        if (!trials || trials.length === 0) {
+            container.innerHTML = '<p>No trials found.</p>';
+            return;
+        }
+
+        let html = `
+            <table class="sortable-table">
+                <thead>
+                    <tr>
+                        <th onclick="adminDashboard.sortTrials('license_key')" class="${sortColumn === 'license_key' ? 'sort-' + sortDirection : ''}">License Key</th>
+                        <th onclick="adminDashboard.sortTrials('customer_name')" class="${sortColumn === 'customer_name' ? 'sort-' + sortDirection : ''}">Customer</th>
+                        <th onclick="adminDashboard.sortTrials('customer_email')" class="${sortColumn === 'customer_email' ? 'sort-' + sortDirection : ''}">Email</th>
+                        <th onclick="adminDashboard.sortTrials('trial_status')" class="${sortColumn === 'trial_status' ? 'sort-' + sortDirection : ''}">Trial Status</th>
+                        <th onclick="adminDashboard.sortTrials('status')" class="${sortColumn === 'status' ? 'sort-' + sortDirection : ''}">License Status</th>
+                        <th onclick="adminDashboard.sortTrials('sites_used')" class="${sortColumn === 'sites_used' ? 'sort-' + sortDirection : ''}">Sites Used</th>
+                        <th onclick="adminDashboard.sortTrials('days_remaining')" class="${sortColumn === 'days_remaining' ? 'sort-' + sortDirection : ''}">Days Left</th>
+                        <th onclick="adminDashboard.sortTrials('created_at')" class="${sortColumn === 'created_at' ? 'sort-' + sortDirection : ''}">Started</th>
+                        <th onclick="adminDashboard.sortTrials('trial_end_date')" class="${sortColumn === 'trial_end_date' ? 'sort-' + sortDirection : ''}">Expires</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        trials.forEach(t => {
+            const statusClass = t.status === 'active' ? 'status-active' : 'status-inactive';
+            const trialStatusClass = t.trial_status === 'active' ? 'status-active' : t.trial_status === 'expired' ? 'status-expired' : 'status-inactive';
+            const createdDate = new Date(t.created_at).toLocaleDateString();
+            const expiresDate = t.trial_end_date ? new Date(t.trial_end_date).toLocaleDateString() : 'Unknown';
+            
+            html += `
+                <tr>
+                    <td><span class="license-code">${t.license_key}</span></td>
+                    <td>${t.customer_name || 'N/A'}</td>
+                    <td>${t.customer_email}</td>
+                    <td><span class="status-badge ${trialStatusClass}">${t.trial_status}</span></td>
+                    <td><span class="status-badge ${statusClass}">${t.status}</span></td>
+                    <td>${t.sites_used}</td>
+                    <td>${t.days_remaining}</td>
+                    <td>${createdDate}</td>
+                    <td>${expiresDate}</td>
+                    <td>
+                        <button class="mini-btn btn-xs-info" onclick="adminDashboard.viewCustomer('${t.customer_email}')">View</button>
+                        ${t.status === 'active' ? 
+                            `<button class="mini-btn btn-xs-danger" onclick="adminDashboard.toggleLicenseStatus('${t.license_key}', 'disable')">Disable</button>` :
+                            `<button class="mini-btn btn-xs-success" onclick="adminDashboard.toggleLicenseStatus('${t.license_key}', 'enable')">Enable</button>`
+                        }
+                        ${t.kill_switch_enabled ? 
+                            `<button class="mini-btn btn-xs-danger" onclick="adminDashboard.toggleKillSwitch('${t.license_key}', 'disable')">Kill</button>` :
+                            `<button class="mini-btn btn-xs-success" onclick="adminDashboard.toggleKillSwitch('${t.license_key}', 'enable')">Revive</button>`
+                        }
+                        <button class="mini-btn btn-xs-info" onclick="adminDashboard.showExtendTrialModal('${t.license_key}')">Extend</button>
+                        <button class="mini-btn btn-xs-success" onclick="adminDashboard.convertToLifetime('${t.license_key}')">Upgrade</button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    // Sort functions
+    sortPurchasers(column) {
+        const newDirection = (this.currentPurchasersSort.column === column && this.currentPurchasersSort.direction === 'asc') ? 'desc' : 'asc';
+        this.loadPurchasers(column, newDirection);
+    }
+
+    sortTrials(column) {
+        const newDirection = (this.currentTrialsSort.column === column && this.currentTrialsSort.direction === 'asc') ? 'desc' : 'asc';
+        this.loadTrials(column, newDirection);
+    }
+
+    // Toggle license status (enable/disable)
+    async toggleLicenseStatus(licenseKey, action) {
+        if (!confirm(`Are you sure you want to ${action} license ${licenseKey}?`)) {
+            return;
+        }
+
+        try {
+            this.showLoading();
+            
+            const response = await fetch('/admin/api/toggle-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-key': this.adminKey
+                },
+                body: JSON.stringify({ license_key: licenseKey, action })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showSuccess(data.message);
+                this.loadDashboard(); // Refresh dashboard
+                this.loadPurchasers(); // Refresh purchasers
+                this.loadTrials(); // Refresh trials
+            } else {
+                this.showError(data.error || 'Operation failed');
+            }
+        } catch (error) {
+            console.error('Toggle license status error:', error);
+            this.showError('Operation failed');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    // View customer function
+    viewCustomer(email) {
+        document.getElementById('customerEmail').value = email;
+        this.getCustomerData();
+    }
+
+    // Toggle view function for hiding/showing sections
+    toggleView(section) {
+        const element = document.getElementById(section + 'Table').parentElement;
+        element.classList.toggle('section-hidden');
     }
 }
 

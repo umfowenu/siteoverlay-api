@@ -136,6 +136,42 @@
                 </div>
             </section>
 
+            <!-- Purchasers Section -->
+            <section class="license-management">
+                <div class="section-header">
+                    <h2><i class="fas fa-dollar-sign"></i> All Purchasers</h2>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <button onclick="loadPurchasers()" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh Purchasers
+                    </button>
+                    <button onclick="toggleView('purchasers')" class="btn btn-secondary">
+                        <i class="fas fa-eye"></i> Toggle View
+                    </button>
+                </div>
+                <div id="purchasersTable" class="table-container">
+                    <!-- Purchasers table will be loaded here -->
+                </div>
+            </section>
+
+            <!-- Trials Section -->
+            <section class="license-management">
+                <div class="section-header">
+                    <h2><i class="fas fa-flask"></i> All Trials</h2>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <button onclick="loadTrials()" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh Trials
+                    </button>
+                    <button onclick="toggleView('trials')" class="btn btn-secondary">
+                        <i class="fas fa-eye"></i> Toggle View
+                    </button>
+                </div>
+                <div id="trialsTable" class="table-container">
+                    <!-- Trials table will be loaded here -->
+                </div>
+            </section>
+
             <!-- Recent Activity -->
             <section class="recent-activity">
                 <div class="section-header">

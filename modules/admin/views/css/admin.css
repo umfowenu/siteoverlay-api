@@ -565,6 +565,108 @@ body {
     }
 }
 
+/* Table Styles */
+.table-container {
+    overflow-x: auto;
+    max-height: 600px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.sortable-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    background: white;
+}
+
+.sortable-table th {
+    background: #2c3e50;
+    color: white;
+    padding: 12px 8px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    cursor: pointer;
+    user-select: none;
+    border-right: 1px solid #34495e;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.sortable-table th:hover {
+    background: #34495e;
+}
+
+.sortable-table th.sort-asc::after {
+    content: " ▲";
+    color: #3498db;
+}
+
+.sortable-table th.sort-desc::after {
+    content: " ▼";
+    color: #3498db;
+}
+
+.sortable-table td {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    border-right: 1px solid #f0f0f0;
+    font-size: 12px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sortable-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.sortable-table tr:hover {
+    background: #e3f2fd;
+}
+
+.license-code {
+    font-family: 'Courier New', monospace;
+    background: #f4f4f4;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.status-badge {
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.status-active { background: #d4edda; color: #155724; }
+.status-inactive { background: #f8d7da; color: #721c24; }
+.status-expired { background: #fff3cd; color: #856404; }
+
+.mini-btn {
+    padding: 2px 6px;
+    margin: 1px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.btn-xs-danger { background: #dc3545; color: white; }
+.btn-xs-success { background: #28a745; color: white; }
+.btn-xs-warning { background: #ffc107; color: #212529; }
+.btn-xs-info { background: #17a2b8; color: white; }
+
+.mini-btn:hover { opacity: 0.8; }
+
+.section-hidden { display: none; }
+
 /* Utility Classes */
 .text-center { text-align: center; }
 .text-right { text-align: right; }

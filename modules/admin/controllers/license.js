@@ -197,6 +197,162 @@ class LicenseController {
       res.status(500).json({ success: false, error: 'License enable failed' });
     }
   }
+
+  static async getAllPurchasers(req, res) {
+    try {
+      const { sort_by = 'created_at', sort_order = 'desc' } = req.query;
+      
+      // Validate sort column to prevent SQL injection
+      const validColumns = [
+        'license_key', 'license_type', 'customer_email', 'customer_name', 
+        'status', 'created_at', 'amount_paid', 'renewal_date', 'site_limit',
+        'kill_switch_enabled', 'subscription_status'
+      ];
+      
+      const sortColumn = validColumns.includes(sort_by) ? sort_by : 'created_at';
+      const sortDirection = sort_order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+      const purchasers = await db.query(`
+        SELECT 
+          license_key, license_type, customer_email, customer_name,
+          status, kill_switch_enabled, created_at, renewal_date,
+          amount_paid, site_limit, subscription_status, subscription_id,
+          trial_end_date, stripe_price_id
+        FROM licenses 
+        WHERE license_type != 'trial'
+        ORDER BY ${sortColumn} ${sortDirection}
+      `);
+
+      // Get site usage counts for each license
+      const licenseKeys = purchasers.rows.map(p => p.license_key);
+      let siteUsage = { rows: [] };
+      
+      if (licenseKeys.length > 0) {
+        siteUsage = await db.query(`
+          SELECT license_key, COUNT(*) as sites_used
+          FROM site_usage 
+          WHERE license_key = ANY($1)
+          GROUP BY license_key
+        `, [licenseKeys]);
+      }
+
+      // Merge site usage data
+      const siteUsageMap = {};
+      siteUsage.rows.forEach(su => {
+        siteUsageMap[su.license_key] = parseInt(su.sites_used);
+      });
+
+      const enrichedPurchasers = purchasers.rows.map(p => ({
+        ...p,
+        sites_used: siteUsageMap[p.license_key] || 0
+      }));
+
+      res.json({
+        success: true,
+        purchasers: enrichedPurchasers,
+        total: enrichedPurchasers.length,
+        sort_by: sortColumn,
+        sort_order: sortDirection.toLowerCase()
+      });
+    } catch (error) {
+      console.error('Get all purchasers error:', error);
+      res.status(500).json({ success: false, error: 'Failed to load purchasers' });
+    }
+  }
+
+  static async getAllTrials(req, res) {
+    try {
+      const { sort_by = 'created_at', sort_order = 'desc' } = req.query;
+      
+      const validColumns = [
+        'license_key', 'customer_email', 'customer_name', 'status',
+        'created_at', 'trial_end_date', 'kill_switch_enabled'
+      ];
+      
+      const sortColumn = validColumns.includes(sort_by) ? sort_by : 'created_at';
+      const sortDirection = sort_order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+      const trials = await db.query(`
+        SELECT 
+          license_key, customer_email, customer_name, status,
+          kill_switch_enabled, created_at, trial_end_date,
+          CASE 
+            WHEN trial_end_date > NOW() THEN 'active'
+            WHEN trial_end_date <= NOW() THEN 'expired'
+            ELSE 'unknown'
+          END as trial_status,
+          EXTRACT(DAYS FROM (trial_end_date - NOW())) as days_remaining
+        FROM licenses 
+        WHERE license_type = 'trial'
+        ORDER BY ${sortColumn} ${sortDirection}
+      `);
+
+      // Get site usage for trials
+      const licenseKeys = trials.rows.map(t => t.license_key);
+      let siteUsage = { rows: [] };
+      
+      if (licenseKeys.length > 0) {
+        siteUsage = await db.query(`
+          SELECT license_key, COUNT(*) as sites_used
+          FROM site_usage 
+          WHERE license_key = ANY($1)
+          GROUP BY license_key
+        `, [licenseKeys]);
+      }
+
+      const siteUsageMap = {};
+      siteUsage.rows.forEach(su => {
+        siteUsageMap[su.license_key] = parseInt(su.sites_used);
+      });
+
+      const enrichedTrials = trials.rows.map(t => ({
+        ...t,
+        sites_used: siteUsageMap[t.license_key] || 0,
+        days_remaining: Math.max(0, Math.floor(t.days_remaining || 0))
+      }));
+
+      res.json({
+        success: true,
+        trials: enrichedTrials,
+        total: enrichedTrials.length,
+        sort_by: sortColumn,
+        sort_order: sortDirection.toLowerCase()
+      });
+    } catch (error) {
+      console.error('Get all trials error:', error);
+      res.status(500).json({ success: false, error: 'Failed to load trials' });
+    }
+  }
+
+  static async toggleLicenseStatus(req, res) {
+    try {
+      const { license_key, action } = req.body; // action: 'enable' or 'disable'
+      const newStatus = action === 'enable' ? 'active' : 'inactive';
+      
+      const result = await db.query(`
+        UPDATE licenses 
+        SET status = $1, updated_at = NOW()
+        WHERE license_key = $2
+        RETURNING license_key, status, kill_switch_enabled
+      `, [newStatus, license_key]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'License not found' 
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: `License ${license_key} ${action}d successfully`,
+        license: result.rows[0]
+      });
+    } catch (error) {
+      console.error('Toggle license status error:', error);
+      res.status(500).json({ success: false, error: 'License status toggle failed' });
+    }
+  }
 }
 
 module.exports = LicenseController; 
