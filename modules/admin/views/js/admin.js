@@ -591,16 +591,26 @@ class AdminDashboard {
     // Load all purchasers
     async loadPurchasers(sortBy = null, sortOrder = null) {
         try {
+            console.log('🔍 DEBUG: Loading purchasers...');
             const sort = sortBy || this.currentPurchasersSort.column;
             const order = sortOrder || this.currentPurchasersSort.direction;
             
-            const response = await fetch(`/admin/api/purchasers?admin_key=${this.adminKey}&sort_by=${sort}&sort_order=${order}`);
+            const url = `/admin/api/purchasers?admin_key=${this.adminKey}&sort_by=${sort}&sort_order=${order}`;
+            console.log('🔍 DEBUG: Fetching from URL:', url);
+            
+            const response = await fetch(url);
+            console.log('🔍 DEBUG: Response status:', response.status);
+            
             const data = await response.json();
+            console.log('🔍 DEBUG: Response data:', data);
             
             if (data.success) {
                 this.purchasersData = data.purchasers;
                 this.currentPurchasersSort = { column: sort, direction: order };
+                console.log('🔍 DEBUG: Found purchasers:', data.purchasers.length);
                 this.displayPurchasersTable(data.purchasers, sort, order);
+            } else {
+                console.error('🔍 DEBUG: API returned success: false');
             }
         } catch (error) {
             console.error('Error loading purchasers:', error);

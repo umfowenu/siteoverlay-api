@@ -200,7 +200,9 @@ class LicenseController {
 
   static async getAllPurchasers(req, res) {
     try {
+      console.log('🔍 DEBUG: getAllPurchasers called');
       const { sort_by = 'created_at', sort_order = 'desc' } = req.query;
+      console.log('🔍 DEBUG: Sort params:', { sort_by, sort_order });
       
       // Validate sort column to prevent SQL injection
       const validColumns = [
@@ -212,6 +214,7 @@ class LicenseController {
       const sortColumn = validColumns.includes(sort_by) ? sort_by : 'created_at';
       const sortDirection = sort_order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
+      console.log('🔍 DEBUG: Executing query with filter: license_type != trial');
       const purchasers = await db.query(`
         SELECT 
           license_key, license_type, customer_email, customer_name,
@@ -225,7 +228,7 @@ class LicenseController {
 
       console.log('🔍 DEBUG: Found purchasers:', purchasers.rows.length);
       purchasers.rows.forEach(p => {
-        console.log(`🔍 DEBUG: Purchaser - ${p.customer_email} (${p.license_type})`);
+        console.log(`🔍 DEBUG: Purchaser - ${p.customer_email} (${p.license_type}) - ${p.customer_name}`);
       });
 
       // Get site usage counts for each license
@@ -233,12 +236,14 @@ class LicenseController {
       let siteUsage = { rows: [] };
       
       if (licenseKeys.length > 0) {
+        console.log('🔍 DEBUG: Getting site usage for licenses:', licenseKeys);
         siteUsage = await db.query(`
           SELECT license_key, COUNT(*) as sites_used
           FROM site_usage 
           WHERE license_key = ANY($1)
           GROUP BY license_key
         `, [licenseKeys]);
+        console.log('🔍 DEBUG: Site usage results:', siteUsage.rows);
       }
 
       // Merge site usage data
@@ -252,6 +257,7 @@ class LicenseController {
         sites_used: siteUsageMap[p.license_key] || 0
       }));
 
+      console.log('🔍 DEBUG: Returning enriched purchasers:', enrichedPurchasers.length);
       res.json({
         success: true,
         purchasers: enrichedPurchasers,
