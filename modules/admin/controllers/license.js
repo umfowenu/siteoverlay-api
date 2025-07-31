@@ -223,6 +223,11 @@ class LicenseController {
         ORDER BY ${sortColumn} ${sortDirection}
       `);
 
+      console.log('🔍 DEBUG: Found purchasers:', purchasers.rows.length);
+      purchasers.rows.forEach(p => {
+        console.log(`🔍 DEBUG: Purchaser - ${p.customer_email} (${p.license_type})`);
+      });
+
       // Get site usage counts for each license
       const licenseKeys = purchasers.rows.map(p => p.license_key);
       let siteUsage = { rows: [] };
@@ -326,15 +331,15 @@ class LicenseController {
 
   static async toggleLicenseStatus(req, res) {
     try {
-      const { license_key, action } = req.body; // action: 'enable' or 'disable'
-      const newStatus = action === 'enable' ? 'active' : 'inactive';
+      const { license_key, action } = req.body;
+      const enabled = action === 'enable';
       
       const result = await db.query(`
         UPDATE licenses 
         SET status = $1, updated_at = NOW()
         WHERE license_key = $2
-        RETURNING license_key, status, kill_switch_enabled
-      `, [newStatus, license_key]);
+        RETURNING license_key, status
+      `, [enabled ? 'active' : 'inactive', license_key]);
 
       if (result.rows.length === 0) {
         return res.status(404).json({ 
@@ -345,12 +350,57 @@ class LicenseController {
 
       res.json({ 
         success: true, 
-        message: `License ${license_key} ${action}d successfully`,
+        message: `License ${license_key} ${enabled ? 'enabled' : 'disabled'}`,
         license: result.rows[0]
       });
     } catch (error) {
       console.error('Toggle license status error:', error);
-      res.status(500).json({ success: false, error: 'License status toggle failed' });
+      res.status(500).json({ success: false, error: 'Toggle operation failed' });
+    }
+  }
+
+  // Debug endpoint to check license types and Joe Smith's data
+  static async debugLicenseTypes(req, res) {
+    try {
+      // Get all unique license types
+      const licenseTypes = await db.query(`
+        SELECT DISTINCT license_type, COUNT(*) as count
+        FROM licenses 
+        GROUP BY license_type
+        ORDER BY count DESC
+      `);
+
+      // Get Joe Smith's licenses specifically
+      const joeSmithLicenses = await db.query(`
+        SELECT license_key, license_type, customer_email, customer_name, status, created_at, amount_paid
+        FROM licenses 
+        WHERE customer_email ILIKE '%joe%' OR customer_name ILIKE '%joe%' OR customer_name ILIKE '%smith%'
+        ORDER BY created_at DESC
+      `);
+
+      // Get all purchasers with their license types
+      const allPurchasers = await db.query(`
+        SELECT license_key, license_type, customer_email, customer_name, status, created_at, amount_paid
+        FROM licenses 
+        WHERE license_type != 'trial'
+        ORDER BY created_at DESC
+        LIMIT 20
+      `);
+
+      res.json({
+        success: true,
+        license_types: licenseTypes.rows,
+        joe_smith_licenses: joeSmithLicenses.rows,
+        all_purchasers_sample: allPurchasers.rows,
+        debug_info: {
+          current_filter: "license_type IN ('5_site_license', 'annual_unlimited', 'lifetime_unlimited')",
+          total_licenses: (await db.query('SELECT COUNT(*) FROM licenses')).rows[0].count,
+          non_trial_licenses: (await db.query("SELECT COUNT(*) FROM licenses WHERE license_type != 'trial'")).rows[0].count
+        }
+      });
+    } catch (error) {
+      console.error('Debug license types error:', error);
+      res.status(500).json({ success: false, error: 'Debug failed' });
     }
   }
 }

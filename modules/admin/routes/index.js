@@ -28,4 +28,7 @@ router.get('/trials', adminAuth, LicenseController.getAllTrials);
 // New license control route
 router.post('/toggle-status', adminAuth, LicenseController.toggleLicenseStatus);
 
+// Debug route
+router.get('/debug-license-types', adminAuth, LicenseController.debugLicenseTypes);
+
 module.exports = router; 
