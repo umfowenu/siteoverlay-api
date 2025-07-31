@@ -30,7 +30,13 @@ app.use((req, res, next) => {
 const routes = require('./routes');
 app.use('/api', routes);
 
+// Import and mount admin module
+const AdminModule = require('./modules/admin');
+const adminModule = new AdminModule();
+app.use('/admin', adminModule.getRouter());
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`SiteOverlay API running on port ${PORT}`);
+  console.log(`Admin panel available at: http://localhost:${PORT}/admin`);
 });

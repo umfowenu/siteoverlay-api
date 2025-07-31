@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SiteOverlay Pro - Admin Dashboard</title>
+    <link rel="stylesheet" href="/admin/css/admin.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Header -->
+        <header class="admin-header">
+            <div class="header-content">
+                <h1><i class="fas fa-shield-alt"></i> SiteOverlay Pro Admin</h1>
+                <div class="header-actions">
+                    <button id="refreshBtn" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <div class="system-status" id="systemStatus">
+                        <i class="fas fa-circle status-indicator"></i>
+                        <span>Checking...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Dashboard Stats -->
+            <section class="dashboard-stats" id="dashboardStats">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-content">
+                            <h3 id="totalLicenses">-</h3>
+                            <p>Total Licenses</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stat-content">
+                            <h3 id="activeLicenses">-</h3>
+                            <p>Active Licenses</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
+                        <div class="stat-content">
+                            <h3 id="totalRevenue">-</h3>
+                            <p>Total Revenue</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-globe"></i></div>
+                        <div class="stat-content">
+                            <h3 id="totalSites">-</h3>
+                            <p>Total Sites</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- License Management -->
+            <section class="license-management">
+                <div class="section-header">
+                    <h2><i class="fas fa-key"></i> License Management</h2>
+                </div>
+                
+                <!-- Search Section -->
+                <div class="search-section">
+                    <div class="search-form">
+                        <input type="text" id="searchQuery" placeholder="Search by email, license key, or domain..." class="search-input">
+                        <select id="searchType" class="search-select">
+                            <option value="all">All</option>
+                            <option value="email">Email</option>
+                            <option value="license">License Key</option>
+                            <option value="domain">Domain</option>
+                        </select>
+                        <button id="searchBtn" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search Results -->
+                <div class="search-results" id="searchResults" style="display: none;">
+                    <h3>Search Results</h3>
+                    <div class="results-table-container">
+                        <table class="results-table" id="resultsTable">
+                            <thead>
+                                <tr>
+                                    <th>License Key</th>
+                                    <th>Type</th>
+                                    <th>Customer</th>
+                                    <th>Status</th>
+                                    <th>Kill Switch</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Customer Management -->
+            <section class="customer-management">
+                <div class="section-header">
+                    <h2><i class="fas fa-user"></i> Customer Management</h2>
+                </div>
+                
+                <div class="customer-search">
+                    <input type="email" id="customerEmail" placeholder="Enter customer email..." class="search-input">
+                    <button id="customerSearchBtn" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Get Customer Data
+                    </button>
+                </div>
+
+                <div class="customer-data" id="customerData" style="display: none;">
+                    <div class="customer-summary" id="customerSummary">
+                    </div>
+                    <div class="customer-details">
+                        <div class="customer-licenses">
+                            <h4>Customer Licenses</h4>
+                            <div class="licenses-list" id="customerLicenses">
+                            </div>
+                        </div>
+                        <div class="customer-sites">
+                            <h4>Customer Sites</h4>
+                            <div class="sites-list" id="customerSites">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Activity -->
+            <section class="recent-activity">
+                <div class="section-header">
+                    <h2><i class="fas fa-clock"></i> Recent Licenses</h2>
+                </div>
+                <div class="activity-list" id="recentLicenses">
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="actionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">License Action</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+            </div>
+            <div class="modal-footer">
+                <button id="modalCancel" class="btn btn-secondary">Cancel</button>
+                <button id="modalConfirm" class="btn btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <script src="/admin/js/admin.js"></script>
+</body>
+</html> 
