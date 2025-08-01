@@ -51,6 +51,30 @@ class AdminDashboard {
             this.getCustomerData();
         });
 
+        // Dynamic content management
+        document.getElementById('refreshContentBtn').addEventListener('click', () => {
+            this.loadDynamicContent();
+        });
+
+        document.getElementById('saveContentBtn').addEventListener('click', () => {
+            this.saveDynamicContent();
+        });
+
+        document.getElementById('clearContentBtn').addEventListener('click', () => {
+            this.clearContentForm();
+        });
+
+        document.getElementById('togglePreviewBtn').addEventListener('click', () => {
+            this.togglePluginPreview();
+        });
+
+        // Preview tabs
+        document.querySelectorAll('.preview-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                this.switchPreviewTab(e.target.dataset.tab);
+            });
+        });
+
         // Modal events
         document.querySelector('.close').addEventListener('click', () => {
             this.closeModal();
@@ -830,6 +854,258 @@ class AdminDashboard {
     toggleView(section) {
         const element = document.getElementById(section + 'Table').parentElement;
         element.classList.toggle('section-hidden');
+    }
+
+    // Dynamic Content Management Methods
+    async loadDynamicContent() {
+        try {
+            this.showLoading();
+            
+            const response = await fetch(`/admin/dynamic-content?admin_key=${this.adminKey}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.displayDynamicContent(data.content);
+                this.updatePluginPreview(data.content);
+            } else {
+                this.showError('Failed to load dynamic content');
+            }
+        } catch (error) {
+            console.error('Dynamic content load error:', error);
+            this.showError('Failed to load dynamic content');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    displayDynamicContent(content) {
+        const tbody = document.getElementById('contentTableBody');
+        tbody.innerHTML = '';
+
+        content.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${item.content_key}</strong></td>
+                <td class="content-value" title="${item.content_value || ''}">${item.content_value || '<em>No value</em>'}</td>
+                <td><span class="badge badge-${item.content_type}">${item.content_type}</span></td>
+                <td>${item.license_type}</td>
+                <td>
+                    <span class="status-badge ${item.is_active ? 'status-active' : 'status-inactive'}">
+                        ${item.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td class="content-actions">
+                    <button class="mini-btn btn-xs-info" onclick="adminDashboard.editContent('${item.content_key}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="mini-btn btn-xs-${item.is_active ? 'warning' : 'success'}" 
+                            onclick="adminDashboard.toggleContentStatus('${item.content_key}', ${!item.is_active})">
+                        <i class="fas fa-${item.is_active ? 'pause' : 'play'}"></i>
+                    </button>
+                    <button class="mini-btn btn-xs-danger" onclick="adminDashboard.deleteContent('${item.content_key}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    editContent(contentKey) {
+        // Find the content item and populate the form
+        fetch(`/admin/dynamic-content?admin_key=${this.adminKey}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const item = data.content.find(c => c.content_key === contentKey);
+                    if (item) {
+                        document.getElementById('contentKey').value = item.content_key;
+                        document.getElementById('contentValue').value = item.content_value || '';
+                        document.getElementById('contentType').value = item.content_type;
+                        document.getElementById('licenseType').value = item.license_type;
+                        document.getElementById('pluginVersionMin').value = item.plugin_version_min || '';
+                        document.getElementById('pluginVersionMax').value = item.plugin_version_max || '';
+                        document.getElementById('contentActive').checked = item.is_active;
+                        
+                        // Scroll to the editor
+                        document.querySelector('.content-editor').scrollIntoView({ behavior: 'smooth' });
+                    }
+                }
+            });
+    }
+
+    async saveDynamicContent() {
+        try {
+            const contentData = {
+                admin_key: this.adminKey,
+                content_key: document.getElementById('contentKey').value.trim(),
+                content_value: document.getElementById('contentValue').value.trim(),
+                content_type: document.getElementById('contentType').value,
+                license_type: document.getElementById('licenseType').value,
+                plugin_version_min: document.getElementById('pluginVersionMin').value.trim() || null,
+                plugin_version_max: document.getElementById('pluginVersionMax').value.trim() || null,
+                is_active: document.getElementById('contentActive').checked
+            };
+
+            if (!contentData.content_key) {
+                this.showError('Content key is required');
+                return;
+            }
+
+            this.showLoading();
+
+            const response = await fetch('/admin/dynamic-content', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(contentData)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showSuccess(data.message);
+                this.clearContentForm();
+                this.loadDynamicContent(); // Refresh the content list
+            } else {
+                this.showError(data.error || 'Failed to save content');
+            }
+        } catch (error) {
+            console.error('Save content error:', error);
+            this.showError('Failed to save content');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    clearContentForm() {
+        document.getElementById('contentKey').value = '';
+        document.getElementById('contentValue').value = '';
+        document.getElementById('contentType').value = 'text';
+        document.getElementById('licenseType').value = 'all';
+        document.getElementById('pluginVersionMin').value = '';
+        document.getElementById('pluginVersionMax').value = '';
+        document.getElementById('contentActive').checked = true;
+    }
+
+    async toggleContentStatus(contentKey, isActive) {
+        try {
+            const contentData = {
+                admin_key: this.adminKey,
+                content_key: contentKey,
+                is_active: isActive
+            };
+
+            const response = await fetch('/admin/dynamic-content', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(contentData)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showSuccess(`Content ${isActive ? 'activated' : 'deactivated'} successfully`);
+                this.loadDynamicContent(); // Refresh the content list
+            } else {
+                this.showError(data.error || 'Failed to update content status');
+            }
+        } catch (error) {
+            console.error('Toggle content status error:', error);
+            this.showError('Failed to update content status');
+        }
+    }
+
+    async deleteContent(contentKey) {
+        if (!confirm(`Are you sure you want to delete the content "${contentKey}"?`)) {
+            return;
+        }
+
+        try {
+            const contentData = {
+                admin_key: this.adminKey,
+                content_key: contentKey,
+                is_active: false // Deactivate instead of delete for safety
+            };
+
+            const response = await fetch('/admin/dynamic-content', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(contentData)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showSuccess('Content deactivated successfully');
+                this.loadDynamicContent(); // Refresh the content list
+            } else {
+                this.showError(data.error || 'Failed to deactivate content');
+            }
+        } catch (error) {
+            console.error('Delete content error:', error);
+            this.showError('Failed to deactivate content');
+        }
+    }
+
+    togglePluginPreview() {
+        const preview = document.getElementById('pluginPreview');
+        const button = document.getElementById('togglePreviewBtn');
+        
+        if (preview.style.display === 'none') {
+            preview.style.display = 'block';
+            button.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Plugin Preview';
+            this.loadDynamicContent(); // Load content for preview
+        } else {
+            preview.style.display = 'none';
+            button.innerHTML = '<i class="fas fa-eye"></i> Toggle Plugin Preview';
+        }
+    }
+
+    switchPreviewTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.preview-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+        // Update preview panels
+        document.querySelectorAll('.preview-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        document.getElementById(tabName + 'Preview').classList.add('active');
+    }
+
+    updatePluginPreview(content) {
+        // Update settings page preview
+        const settingsContent = document.getElementById('previewDynamicContent');
+        settingsContent.innerHTML = '';
+
+        content.forEach(item => {
+            if (item.is_active) {
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'preview-content-item';
+                contentDiv.innerHTML = `
+                    <p><strong>${item.content_key}:</strong> ${item.content_value || '<em>No value</em>'}</p>
+                `;
+                settingsContent.appendChild(contentDiv);
+            }
+        });
+
+        // Update meta box preview
+        const metaboxContent = document.getElementById('previewMetaboxContent');
+        metaboxContent.innerHTML = `
+            <div class="preview-content-item">
+                <p><strong>Upgrade Message:</strong> Limited Time: Save $100 on Unlimited License!</p>
+                <p><strong>Support URL:</strong> <a href="#">https://siteoverlaypro.com/support</a></p>
+                <p><strong>Training URL:</strong> <a href="#">https://siteoverlaypro.com/training</a></p>
+            </div>
+        `;
     }
 }
 

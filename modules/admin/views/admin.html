@@ -172,6 +172,158 @@
                 </div>
             </section>
 
+            <!-- Dynamic Content Management -->
+            <section class="dynamic-content-management">
+                <div class="section-header">
+                    <h2><i class="fas fa-edit"></i> Dynamic Content Management</h2>
+                    <div class="header-actions">
+                        <button id="togglePreviewBtn" class="btn btn-secondary">
+                            <i class="fas fa-eye"></i> Toggle Plugin Preview
+                        </button>
+                        <button id="refreshContentBtn" class="btn btn-primary">
+                            <i class="fas fa-sync-alt"></i> Refresh Content
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="content-management-grid">
+                    <!-- Content Editor -->
+                    <div class="content-editor">
+                        <h3>Content Editor</h3>
+                        <div class="content-form">
+                            <div class="form-group">
+                                <label for="contentKey">Content Key:</label>
+                                <input type="text" id="contentKey" placeholder="e.g., upgrade_message, support_url" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="contentValue">Content Value:</label>
+                                <textarea id="contentValue" placeholder="Enter content value..." class="form-textarea"></textarea>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contentType">Content Type:</label>
+                                    <select id="contentType" class="form-select">
+                                        <option value="text">Text</option>
+                                        <option value="url">URL</option>
+                                        <option value="html">HTML</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="licenseType">License Type:</label>
+                                    <select id="licenseType" class="form-select">
+                                        <option value="all">All Licenses</option>
+                                        <option value="trial">Trial Only</option>
+                                        <option value="5_site_license">5 Site License</option>
+                                        <option value="annual_unlimited">Annual Unlimited</option>
+                                        <option value="lifetime_unlimited">Lifetime Unlimited</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="pluginVersionMin">Min Plugin Version:</label>
+                                    <input type="text" id="pluginVersionMin" placeholder="1.0.0" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label for="pluginVersionMax">Max Plugin Version:</label>
+                                    <input type="text" id="pluginVersionMax" placeholder="2.0.0" class="form-input">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="contentActive" checked>
+                                    Active
+                                </label>
+                            </div>
+                            <div class="form-actions">
+                                <button id="saveContentBtn" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> Save Content
+                                </button>
+                                <button id="clearContentBtn" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> Clear Form
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content List -->
+                    <div class="content-list">
+                        <h3>Current Content</h3>
+                        <div class="content-table-container">
+                            <table class="content-table" id="contentTable">
+                                <thead>
+                                    <tr>
+                                        <th>Key</th>
+                                        <th>Value</th>
+                                        <th>Type</th>
+                                        <th>License</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="contentTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plugin Preview -->
+                <div class="plugin-preview" id="pluginPreview" style="display: none;">
+                    <h3>WordPress Plugin Preview</h3>
+                    <div class="preview-tabs">
+                        <button class="preview-tab active" data-tab="settings">Settings Page</button>
+                        <button class="preview-tab" data-tab="metabox">Post/Page Meta Box</button>
+                    </div>
+                    
+                    <div class="preview-content">
+                        <!-- Settings Page Preview -->
+                        <div class="preview-panel active" id="settingsPreview">
+                            <div class="wp-admin-preview">
+                                <div class="wp-admin-header">
+                                    <h1>SiteOverlay Pro Settings</h1>
+                                </div>
+                                <div class="wp-admin-content">
+                                    <div class="settings-section">
+                                        <h2>License Information</h2>
+                                        <p><strong>License Key:</strong> <span id="previewLicenseKey">SITE-XXXX-XXXX-XXXX</span></p>
+                                        <p><strong>Status:</strong> <span id="previewLicenseStatus">Active</span></p>
+                                        <p><strong>Type:</strong> <span id="previewLicenseType">Professional (5 Sites)</span></p>
+                                    </div>
+                                    <div class="settings-section">
+                                        <h2>Dynamic Content</h2>
+                                        <div id="previewDynamicContent">
+                                            <!-- Dynamic content will be populated here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Meta Box Preview -->
+                        <div class="preview-panel" id="metaboxPreview">
+                            <div class="wp-admin-preview">
+                                <div class="wp-admin-header">
+                                    <h1>Edit Post - WordPress Admin</h1>
+                                </div>
+                                <div class="wp-admin-content">
+                                    <div class="metabox-preview">
+                                        <div class="metabox-header">
+                                            <h3>SiteOverlay Pro</h3>
+                                        </div>
+                                        <div class="metabox-content">
+                                            <div id="previewMetaboxContent">
+                                                <!-- Meta box content will be populated here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Recent Activity -->
             <section class="recent-activity">
                 <div class="section-header">

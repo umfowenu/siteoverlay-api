@@ -70,6 +70,11 @@ async function migrate() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Create indexes for dynamic_content table
+    CREATE INDEX IF NOT EXISTS idx_dynamic_content_content_key ON dynamic_content(content_key);
+    CREATE INDEX IF NOT EXISTS idx_dynamic_content_license_type ON dynamic_content(license_type);
+    CREATE INDEX IF NOT EXISTS idx_dynamic_content_active ON dynamic_content(is_active);
+
     CREATE TABLE IF NOT EXISTS email_collection (
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) NOT NULL,
