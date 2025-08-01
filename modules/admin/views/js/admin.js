@@ -16,6 +16,7 @@ class AdminDashboard {
         this.loadDashboard();
         this.checkSystemHealth();
         loadDynamicContent();
+        initializePreview();
     }
 
     getAdminKey() {
@@ -988,4 +989,72 @@ function showContentMessage(message, type) {
     setTimeout(() => {
         messageDiv.remove();
     }, 5000);
+}
+
+// Plugin Preview Functions
+function initializePreview() {
+    const toggleBtn = document.getElementById('togglePreview');
+    const previewDiv = document.getElementById('pluginPreview');
+    
+    if (toggleBtn && previewDiv) {
+        toggleBtn.addEventListener('click', function() {
+            const isVisible = previewDiv.style.display !== 'none';
+            
+            if (isVisible) {
+                previewDiv.style.display = 'none';
+                toggleBtn.innerHTML = '<i class="fas fa-eye"></i> Show Plugin Preview';
+            } else {
+                previewDiv.style.display = 'block';
+                toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Plugin Preview';
+                updatePreview();
+            }
+        });
+        
+        // Add real-time preview updates to content inputs
+        setupPreviewUpdates();
+    }
+}
+
+function setupPreviewUpdates() {
+    // Watch for changes in content inputs
+    const upgradeMessageInput = document.getElementById('upgrade_message');
+    const xagioUrlInput = document.getElementById('xagio_affiliate_url');
+    
+    if (upgradeMessageInput) {
+        upgradeMessageInput.addEventListener('input', function() {
+            updatePreviewText();
+        });
+    }
+    
+    if (xagioUrlInput) {
+        xagioUrlInput.addEventListener('input', function() {
+            updatePreviewText();
+        });
+    }
+}
+
+function updatePreview() {
+    updatePreviewText();
+}
+
+function updatePreviewText() {
+    // Update settings page preview
+    const upgradeMessage = document.getElementById('upgrade_message')?.value || '🚀 Get Xagio';
+    const previewTitle = document.getElementById('preview-upgrade-title');
+    if (previewTitle) {
+        previewTitle.textContent = upgradeMessage;
+    }
+    
+    // Update meta box preview
+    const affiliateMessage = document.getElementById('upgrade_message')?.value || '🚀 Boost Your SEO Rankings';
+    const previewAffiliate = document.getElementById('preview-affiliate-message');
+    if (previewAffiliate) {
+        previewAffiliate.textContent = affiliateMessage;
+    }
+}
+
+// Enhanced update function with preview refresh
+async function updateContentWithPreview(contentKey) {
+    await updateContent(contentKey);
+    updatePreviewText();
 } 

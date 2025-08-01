@@ -686,6 +686,18 @@ body {
     overflow: hidden;
 }
 
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.preview-toggle .btn {
+    margin: 0;
+}
+
 .content-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -814,6 +826,237 @@ body {
     border: 1px solid #f5c6cb;
 }
 
+/* Plugin Preview Mockup */
+.plugin-preview {
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    padding: 2rem;
+    margin-bottom: 1rem;
+}
+
+.plugin-preview h3 {
+    color: #2c3e50;
+    margin-bottom: 1.5rem;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.preview-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.preview-section h4 {
+    color: #495057;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Settings Page Mockup */
+.settings-mockup {
+    background: white;
+    border: 2px dashed #6c757d;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.settings-card {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.settings-card h3 {
+    margin: 0 0 10px 0;
+    color: #856404;
+    font-size: 1.1rem;
+}
+
+.settings-card p {
+    margin: 0;
+    color: #856404;
+    font-size: 0.9rem;
+}
+
+.mockup-button {
+    background: #007cba;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 3px;
+    margin-top: 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+/* Meta Box Mockup */
+.metabox-mockup {
+    background: white;
+    border: 2px dashed #6c757d;
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 350px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.mockup-logo {
+    text-align: center;
+    padding: 10px 0;
+    background: white;
+}
+
+.mockup-status-active {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    padding: 8px;
+    text-align: center;
+    font-size: 12px;
+    border-bottom: none;
+}
+
+.mockup-affiliate {
+    background: #d1ecf1;
+    padding: 15px;
+    text-align: center;
+    border-bottom: none;
+}
+
+.mockup-affiliate-title {
+    color: #0c5460;
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 13px;
+}
+
+.mockup-affiliate-subtitle {
+    color: #0c5460;
+    font-size: 11px;
+    margin-bottom: 10px;
+}
+
+.mockup-affiliate-button {
+    background: #17a2b8;
+    color: white;
+    padding: 6px 12px;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 11px;
+    border: none;
+    cursor: pointer;
+}
+
+.mockup-affiliate-disclaimer {
+    color: #0c5460;
+    font-size: 10px;
+    margin-top: 5px;
+}
+
+.mockup-overlay-section {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    padding: 12px;
+    border-bottom: none;
+}
+
+.mockup-overlay-title {
+    color: #155724;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.mockup-overlay-label {
+    color: #155724;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.mockup-input {
+    width: 100%;
+    padding: 4px;
+    border: 1px solid #c3e6cb;
+    background: white;
+    font-size: 11px;
+    margin-bottom: 8px;
+    border-radius: 2px;
+}
+
+.mockup-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.mockup-btn-edit, .mockup-btn-preview, .mockup-btn-remove {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 2px;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.mockup-btn-edit {
+    background: #007cba;
+    color: white;
+}
+
+.mockup-btn-preview {
+    background: #28a745;
+    color: white;
+}
+
+.mockup-btn-remove {
+    background: #dc3545;
+    color: white;
+}
+
+.mockup-newsletter {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    padding: 12px;
+    border-bottom: none;
+}
+
+.mockup-newsletter-title {
+    color: #856404;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.mockup-email-input {
+    width: 100%;
+    padding: 4px;
+    border: 1px solid #ffeaa7;
+    background: white;
+    font-size: 11px;
+    margin-bottom: 8px;
+    border-radius: 2px;
+}
+
+.mockup-newsletter-btn {
+    background: #ffc107;
+    border: 1px solid #ffc107;
+    color: #212529;
+    font-size: 11px;
+    padding: 4px 8px;
+    width: 100%;
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+.mockup-stats {
+    background: #f8f9fa;
+    padding: 8px 12px;
+    font-size: 10px;
+    color: #6c757d;
+    text-align: center;
+    border-top: 1px solid #e9ecef;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .content-grid {
@@ -823,5 +1066,14 @@ body {
     .add-content-form {
         grid-template-columns: 1fr;
         gap: 0.5rem;
+    }
+    
+    .preview-container {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .metabox-mockup {
+        max-width: 100%;
     }
 } 

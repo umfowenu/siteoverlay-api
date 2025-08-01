@@ -176,6 +176,76 @@
             <section class="dynamic-content-management">
                 <div class="section-header">
                     <h2><i class="fas fa-edit"></i> Dynamic Content Management</h2>
+                    <div class="preview-toggle">
+                        <button id="togglePreview" class="btn btn-secondary">
+                            <i class="fas fa-eye"></i> Show Plugin Preview
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Plugin Visual Preview -->
+                <div class="plugin-preview" id="pluginPreview" style="display: none;">
+                    <h3><i class="fas fa-desktop"></i> Live Plugin Preview</h3>
+                    <div class="preview-container">
+                        <div class="preview-section">
+                            <h4>📝 Settings Page Display</h4>
+                            <div class="settings-mockup">
+                                <div class="settings-card">
+                                    <h3 id="preview-upgrade-title">🚀 Get Xagio</h3>
+                                    <p>Boost your SEO rankings</p>
+                                    <button class="mockup-button">Get Xagio Now</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="preview-section">
+                            <h4>📄 Post/Page Editor Meta Box</h4>
+                            <div class="metabox-mockup">
+                                <!-- Logo Section -->
+                                <div class="mockup-logo">
+                                    <img src="https://page1.genspark.site/v1/base64_upload/fe1edd2c48ac954784b3e58ed66b0764" alt="SiteOverlay Pro" style="max-width: 200px; height: auto;" />
+                                </div>
+                                
+                                <!-- Status Display -->
+                                <div class="mockup-status-active">
+                                    ✓ <strong>SiteOverlay Pro Active</strong><br>
+                                    👁 46 views
+                                </div>
+                                
+                                <!-- Xagio Affiliate Section -->
+                                <div class="mockup-affiliate">
+                                    <div class="mockup-affiliate-title" id="preview-affiliate-message">🚀 Boost Your SEO Rankings</div>
+                                    <div class="mockup-affiliate-subtitle">Get Xagio - The #1 SEO Tool for Rank & Rent Success</div>
+                                    <button class="mockup-affiliate-button">Get Xagio Now</button>
+                                    <div class="mockup-affiliate-disclaimer">Affiliate Link - We earn a commission at no cost to you</div>
+                                </div>
+                                
+                                <!-- Overlay Section -->
+                                <div class="mockup-overlay-section">
+                                    <div class="mockup-overlay-title">✓ Overlay Active</div>
+                                    <div class="mockup-overlay-label"><strong>Current URL:</strong></div>
+                                    <input type="url" value="https://siteoverlay.24hr.pro/" class="mockup-input" readonly>
+                                    <div class="mockup-buttons">
+                                        <button class="mockup-btn-edit">Edit</button>
+                                        <button class="mockup-btn-preview">Preview</button>
+                                        <button class="mockup-btn-remove">Remove</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Email Newsletter Section -->
+                                <div class="mockup-newsletter">
+                                    <div class="mockup-newsletter-title">📧 Get SEO & Rank & Rent Tips</div>
+                                    <input type="email" placeholder="Enter your email" class="mockup-email-input">
+                                    <button class="mockup-newsletter-btn">Subscribe for Free Tips</button>
+                                </div>
+                                
+                                <!-- Stats -->
+                                <div class="mockup-stats">
+                                    Views: 46 | Last Updated: 2025-07-26 03:46:14
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Current Content Display -->
@@ -185,7 +255,7 @@
                         <div class="content-display">
                             <label>Current URL:</label>
                             <input type="url" id="xagio_affiliate_url" class="content-input" placeholder="https://xagio.com/?ref=PENDING">
-                            <button class="btn btn-small btn-primary" onclick="updateContent('xagio_affiliate_url')">
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('xagio_affiliate_url')">
                                 <i class="fas fa-save"></i> Update
                             </button>
                         </div>
@@ -196,7 +266,7 @@
                         <div class="content-display">
                             <label>Current Message:</label>
                             <textarea id="upgrade_message" class="content-textarea" placeholder="Limited Time: Save $100 on Unlimited License!"></textarea>
-                            <button class="btn btn-small btn-primary" onclick="updateContent('upgrade_message')">
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('upgrade_message')">
                                 <i class="fas fa-save"></i> Update
                             </button>
                         </div>
@@ -207,7 +277,7 @@
                         <div class="content-display">
                             <label>Current URL:</label>
                             <input type="url" id="support_url" class="content-input" placeholder="https://siteoverlaypro.com/support">
-                            <button class="btn btn-small btn-primary" onclick="updateContent('support_url')">
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('support_url')">
                                 <i class="fas fa-save"></i> Update
                             </button>
                         </div>
@@ -218,7 +288,7 @@
                         <div class="content-display">
                             <label>Current URL:</label>
                             <input type="url" id="training_url" class="content-input" placeholder="https://siteoverlaypro.com/training">
-                            <button class="btn btn-small btn-primary" onclick="updateContent('training_url')">
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('training_url')">
                                 <i class="fas fa-save"></i> Update
                             </button>
                         </div>
