@@ -176,150 +176,146 @@
             <section class="dynamic-content-management">
                 <div class="section-header">
                     <h2><i class="fas fa-edit"></i> Dynamic Content Management</h2>
-                    <div class="header-actions">
-                        <button id="togglePreviewBtn" class="btn btn-secondary">
-                            <i class="fas fa-eye"></i> Toggle Plugin Preview
-                        </button>
-                        <button id="refreshContentBtn" class="btn btn-primary">
-                            <i class="fas fa-sync-alt"></i> Refresh Content
+                    <div class="preview-toggle">
+                        <button id="togglePreview" class="btn btn-secondary">
+                            <i class="fas fa-eye"></i> Show Plugin Preview
                         </button>
                     </div>
                 </div>
                 
-                <div class="content-management-grid">
-                    <!-- Content Editor -->
-                    <div class="content-editor">
-                        <h3>Content Editor</h3>
-                        <div class="content-form">
-                            <div class="form-group">
-                                <label for="contentKey">Content Key:</label>
-                                <input type="text" id="contentKey" placeholder="e.g., upgrade_message, support_url" class="form-input">
-                            </div>
-                            <div class="form-group">
-                                <label for="contentValue">Content Value:</label>
-                                <textarea id="contentValue" placeholder="Enter content value..." class="form-textarea"></textarea>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="contentType">Content Type:</label>
-                                    <select id="contentType" class="form-select">
-                                        <option value="text">Text</option>
-                                        <option value="url">URL</option>
-                                        <option value="html">HTML</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="licenseType">License Type:</label>
-                                    <select id="licenseType" class="form-select">
-                                        <option value="all">All Licenses</option>
-                                        <option value="trial">Trial Only</option>
-                                        <option value="5_site_license">5 Site License</option>
-                                        <option value="annual_unlimited">Annual Unlimited</option>
-                                        <option value="lifetime_unlimited">Lifetime Unlimited</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="pluginVersionMin">Min Plugin Version:</label>
-                                    <input type="text" id="pluginVersionMin" placeholder="1.0.0" class="form-input">
-                                </div>
-                                <div class="form-group">
-                                    <label for="pluginVersionMax">Max Plugin Version:</label>
-                                    <input type="text" id="pluginVersionMax" placeholder="2.0.0" class="form-input">
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="contentActive" checked>
-                                    Active
-                                </label>
-                            </div>
-                            <div class="form-actions">
-                                <button id="saveContentBtn" class="btn btn-primary">
-                                    <i class="fas fa-save"></i> Save Content
-                                </button>
-                                <button id="clearContentBtn" class="btn btn-secondary">
-                                    <i class="fas fa-times"></i> Clear Form
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content List -->
-                    <div class="content-list">
-                        <h3>Current Content</h3>
-                        <div class="content-table-container">
-                            <table class="content-table" id="contentTable">
-                                <thead>
-                                    <tr>
-                                        <th>Key</th>
-                                        <th>Value</th>
-                                        <th>Type</th>
-                                        <th>License</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="contentTableBody">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Plugin Preview -->
+                <!-- Plugin Visual Preview -->
                 <div class="plugin-preview" id="pluginPreview" style="display: none;">
-                    <h3>WordPress Plugin Preview</h3>
-                    <div class="preview-tabs">
-                        <button class="preview-tab active" data-tab="settings">Settings Page</button>
-                        <button class="preview-tab" data-tab="metabox">Post/Page Meta Box</button>
-                    </div>
-                    
-                    <div class="preview-content">
-                        <!-- Settings Page Preview -->
-                        <div class="preview-panel active" id="settingsPreview">
-                            <div class="wp-admin-preview">
-                                <div class="wp-admin-header">
-                                    <h1>SiteOverlay Pro Settings</h1>
-                                </div>
-                                <div class="wp-admin-content">
-                                    <div class="settings-section">
-                                        <h2>License Information</h2>
-                                        <p><strong>License Key:</strong> <span id="previewLicenseKey">SITE-XXXX-XXXX-XXXX</span></p>
-                                        <p><strong>Status:</strong> <span id="previewLicenseStatus">Active</span></p>
-                                        <p><strong>Type:</strong> <span id="previewLicenseType">Professional (5 Sites)</span></p>
-                                    </div>
-                                    <div class="settings-section">
-                                        <h2>Dynamic Content</h2>
-                                        <div id="previewDynamicContent">
-                                            <!-- Dynamic content will be populated here -->
-                                        </div>
-                                    </div>
+                    <h3><i class="fas fa-desktop"></i> Live Plugin Preview</h3>
+                    <div class="preview-container">
+                        <div class="preview-section">
+                            <h4>📝 Settings Page Display</h4>
+                            <div class="settings-mockup">
+                                <div class="settings-card">
+                                    <h3 id="preview-upgrade-title">🚀 Get Xagio</h3>
+                                    <p>Boost your SEO rankings</p>
+                                    <button class="mockup-button">Get Xagio Now</button>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Meta Box Preview -->
-                        <div class="preview-panel" id="metaboxPreview">
-                            <div class="wp-admin-preview">
-                                <div class="wp-admin-header">
-                                    <h1>Edit Post - WordPress Admin</h1>
+                        <div class="preview-section">
+                            <h4>📄 Post/Page Editor Meta Box</h4>
+                            <div class="metabox-mockup">
+                                <!-- Logo Section -->
+                                <div class="mockup-logo">
+                                    <img src="https://page1.genspark.site/v1/base64_upload/fe1edd2c48ac954784b3e58ed66b0764" alt="SiteOverlay Pro" style="max-width: 200px; height: auto;" />
                                 </div>
-                                <div class="wp-admin-content">
-                                    <div class="metabox-preview">
-                                        <div class="metabox-header">
-                                            <h3>SiteOverlay Pro</h3>
-                                        </div>
-                                        <div class="metabox-content">
-                                            <div id="previewMetaboxContent">
-                                                <!-- Meta box content will be populated here -->
-                                            </div>
-                                        </div>
+                                
+                                <!-- Status Display -->
+                                <div class="mockup-status-active">
+                                    ✓ <strong>SiteOverlay Pro Active</strong><br>
+                                    👁 46 views
+                                </div>
+                                
+                                <!-- Xagio Affiliate Section -->
+                                <div class="mockup-affiliate">
+                                    <div class="mockup-affiliate-title" id="preview-affiliate-message">🚀 Boost Your SEO Rankings</div>
+                                    <div class="mockup-affiliate-subtitle">Get Xagio - The #1 SEO Tool for Rank & Rent Success</div>
+                                    <button class="mockup-affiliate-button">Get Xagio Now</button>
+                                    <div class="mockup-affiliate-disclaimer">Affiliate Link - We earn a commission at no cost to you</div>
+                                </div>
+                                
+                                <!-- Overlay Section -->
+                                <div class="mockup-overlay-section">
+                                    <div class="mockup-overlay-title">✓ Overlay Active</div>
+                                    <div class="mockup-overlay-label"><strong>Current URL:</strong></div>
+                                    <input type="url" value="https://siteoverlay.24hr.pro/" class="mockup-input" readonly>
+                                    <div class="mockup-buttons">
+                                        <button class="mockup-btn-edit">Edit</button>
+                                        <button class="mockup-btn-preview">Preview</button>
+                                        <button class="mockup-btn-remove">Remove</button>
                                     </div>
+                                </div>
+                                
+                                <!-- Email Newsletter Section -->
+                                <div class="mockup-newsletter">
+                                    <div class="mockup-newsletter-title">📧 Get SEO & Rank & Rent Tips</div>
+                                    <input type="email" placeholder="Enter your email" class="mockup-email-input">
+                                    <button class="mockup-newsletter-btn">Subscribe for Free Tips</button>
+                                </div>
+                                
+                                <!-- Stats -->
+                                <div class="mockup-stats">
+                                    Views: 46 | Last Updated: 2025-07-26 03:46:14
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Current Content Display -->
+                <div class="content-grid" id="dynamicContentGrid">
+                    <div class="content-card">
+                        <h3><i class="fas fa-link"></i> Xagio Affiliate URL</h3>
+                        <div class="content-display">
+                            <label>Current URL:</label>
+                            <input type="url" id="xagio_affiliate_url" class="content-input" placeholder="https://xagio.com/?ref=PENDING">
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('xagio_affiliate_url')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-card">
+                        <h3><i class="fas fa-bullhorn"></i> Upgrade Message</h3>
+                        <div class="content-display">
+                            <label>Current Message:</label>
+                            <textarea id="upgrade_message" class="content-textarea" placeholder="Limited Time: Save $100 on Unlimited License!"></textarea>
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('upgrade_message')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-card">
+                        <h3><i class="fas fa-life-ring"></i> Support URL</h3>
+                        <div class="content-display">
+                            <label>Current URL:</label>
+                            <input type="url" id="support_url" class="content-input" placeholder="https://siteoverlaypro.com/support">
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('support_url')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-card">
+                        <h3><i class="fas fa-graduation-cap"></i> Training URL</h3>
+                        <div class="content-display">
+                            <label>Current URL:</label>
+                            <input type="url" id="training_url" class="content-input" placeholder="https://siteoverlaypro.com/training">
+                            <button class="btn btn-small btn-primary" onclick="updateContentWithPreview('training_url')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Add New Content -->
+                <div class="add-content-section">
+                    <h3><i class="fas fa-plus"></i> Add New Content Item</h3>
+                    <div class="add-content-form">
+                        <input type="text" id="newContentKey" placeholder="Content Key (e.g., new_affiliate_url)" class="form-input">
+                        <textarea id="newContentValue" placeholder="Content Value" class="form-textarea"></textarea>
+                        <select id="newContentType" class="form-select">
+                            <option value="text">Text</option>
+                            <option value="url">URL</option>
+                            <option value="html">HTML</option>
+                        </select>
+                        <select id="newContentLicenseType" class="form-select">
+                            <option value="all">All License Types</option>
+                            <option value="trial">Trial Only</option>
+                            <option value="5_site_license">Professional Only</option>
+                            <option value="annual_unlimited">Annual Only</option>
+                            <option value="lifetime_unlimited">Lifetime Only</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="addNewContent()">
+                            <i class="fas fa-plus"></i> Add Content
+                        </button>
                     </div>
                 </div>
             </section>
