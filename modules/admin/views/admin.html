@@ -172,6 +172,84 @@
                 </div>
             </section>
 
+            <!-- Dynamic Content Management -->
+            <section class="dynamic-content-management">
+                <div class="section-header">
+                    <h2><i class="fas fa-edit"></i> Dynamic Content Management</h2>
+                </div>
+                
+                <!-- Current Content Display -->
+                <div class="content-grid" id="dynamicContentGrid">
+                    <div class="content-card">
+                        <h3><i class="fas fa-link"></i> Xagio Affiliate URL</h3>
+                        <div class="content-display">
+                            <label>Current URL:</label>
+                            <input type="url" id="xagio_affiliate_url" class="content-input" placeholder="https://xagio.com/?ref=PENDING">
+                            <button class="btn btn-small btn-primary" onclick="updateContent('xagio_affiliate_url')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-card">
+                        <h3><i class="fas fa-bullhorn"></i> Upgrade Message</h3>
+                        <div class="content-display">
+                            <label>Current Message:</label>
+                            <textarea id="upgrade_message" class="content-textarea" placeholder="Limited Time: Save $100 on Unlimited License!"></textarea>
+                            <button class="btn btn-small btn-primary" onclick="updateContent('upgrade_message')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-card">
+                        <h3><i class="fas fa-life-ring"></i> Support URL</h3>
+                        <div class="content-display">
+                            <label>Current URL:</label>
+                            <input type="url" id="support_url" class="content-input" placeholder="https://siteoverlaypro.com/support">
+                            <button class="btn btn-small btn-primary" onclick="updateContent('support_url')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-card">
+                        <h3><i class="fas fa-graduation-cap"></i> Training URL</h3>
+                        <div class="content-display">
+                            <label>Current URL:</label>
+                            <input type="url" id="training_url" class="content-input" placeholder="https://siteoverlaypro.com/training">
+                            <button class="btn btn-small btn-primary" onclick="updateContent('training_url')">
+                                <i class="fas fa-save"></i> Update
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Add New Content -->
+                <div class="add-content-section">
+                    <h3><i class="fas fa-plus"></i> Add New Content Item</h3>
+                    <div class="add-content-form">
+                        <input type="text" id="newContentKey" placeholder="Content Key (e.g., new_affiliate_url)" class="form-input">
+                        <textarea id="newContentValue" placeholder="Content Value" class="form-textarea"></textarea>
+                        <select id="newContentType" class="form-select">
+                            <option value="text">Text</option>
+                            <option value="url">URL</option>
+                            <option value="html">HTML</option>
+                        </select>
+                        <select id="newContentLicenseType" class="form-select">
+                            <option value="all">All License Types</option>
+                            <option value="trial">Trial Only</option>
+                            <option value="5_site_license">Professional Only</option>
+                            <option value="annual_unlimited">Annual Only</option>
+                            <option value="lifetime_unlimited">Lifetime Only</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="addNewContent()">
+                            <i class="fas fa-plus"></i> Add Content
+                        </button>
+                    </div>
+                </div>
+            </section>
+
             <!-- Recent Activity -->
             <section class="recent-activity">
                 <div class="section-header">

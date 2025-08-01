@@ -15,6 +15,7 @@ class AdminDashboard {
         this.bindEvents();
         this.loadDashboard();
         this.checkSystemHealth();
+        loadDynamicContent();
     }
 
     getAdminKey() {
@@ -853,4 +854,138 @@ style.textContent = `
         }
     }
 `;
-document.head.appendChild(style); 
+document.head.appendChild(style);
+
+// Dynamic Content Management Functions
+async function loadDynamicContent() {
+    try {
+        console.log('📝 Loading dynamic content...');
+        
+        const response = await fetch(`/admin/api/dynamic-content?admin_key=${dashboard.adminKey}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('✅ Dynamic content loaded:', data.content);
+            
+            // Populate the form fields with current values
+            data.content.forEach(item => {
+                const element = document.getElementById(item.content_key);
+                if (element) {
+                    element.value = item.content_value;
+                }
+            });
+        } else {
+            showContentMessage('Failed to load dynamic content', 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error loading dynamic content:', error);
+        showContentMessage('Error loading dynamic content', 'error');
+    }
+}
+
+async function updateContent(contentKey) {
+    try {
+        const element = document.getElementById(contentKey);
+        if (!element || !element.value.trim()) {
+            showContentMessage('Please enter a value', 'error');
+            return;
+        }
+        
+        const contentValue = element.value.trim();
+        const contentType = element.type === 'url' ? 'url' : (element.tagName === 'TEXTAREA' ? 'text' : 'text');
+        
+        console.log('💾 Updating content:', { contentKey, contentValue, contentType });
+        
+        const response = await fetch('/admin/api/dynamic-content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_key: dashboard.adminKey,
+                content_key: contentKey,
+                content_value: contentValue,
+                content_type: contentType,
+                license_type: 'all'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showContentMessage(`${contentKey.replace('_', ' ')} updated successfully!`, 'success');
+            console.log('✅ Content updated:', data.content);
+        } else {
+            showContentMessage(`Failed to update: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error updating content:', error);
+        showContentMessage('Error updating content', 'error');
+    }
+}
+
+async function addNewContent() {
+    try {
+        const contentKey = document.getElementById('newContentKey').value.trim();
+        const contentValue = document.getElementById('newContentValue').value.trim();
+        const contentType = document.getElementById('newContentType').value;
+        const licenseType = document.getElementById('newContentLicenseType').value;
+        
+        if (!contentKey || !contentValue) {
+            showContentMessage('Please enter both content key and value', 'error');
+            return;
+        }
+        
+        console.log('➕ Adding new content:', { contentKey, contentValue, contentType, licenseType });
+        
+        const response = await fetch('/admin/api/dynamic-content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_key: dashboard.adminKey,
+                content_key: contentKey,
+                content_value: contentValue,
+                content_type: contentType,
+                license_type: licenseType
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showContentMessage(`New content "${contentKey}" added successfully!`, 'success');
+            
+            // Clear the form
+            document.getElementById('newContentKey').value = '';
+            document.getElementById('newContentValue').value = '';
+            document.getElementById('newContentType').value = 'text';
+            document.getElementById('newContentLicenseType').value = 'all';
+            
+            // Reload dynamic content
+            setTimeout(loadDynamicContent, 1000);
+        } else {
+            showContentMessage(`Failed to add content: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Error adding content:', error);
+        showContentMessage('Error adding new content', 'error');
+    }
+}
+
+function showContentMessage(message, type) {
+    // Remove existing messages
+    const existingMessages = document.querySelectorAll('.content-message');
+    existingMessages.forEach(msg => msg.remove());
+    
+    // Create new message
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `content-message ${type}`;
+    messageDiv.textContent = message;
+    
+    // Add to the dynamic content section
+    const contentSection = document.querySelector('.dynamic-content-management');
+    contentSection.insertBefore(messageDiv, contentSection.firstChild.nextSibling);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        messageDiv.remove();
+    }, 5000);
+} 

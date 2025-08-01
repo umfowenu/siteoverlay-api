@@ -361,6 +361,125 @@ router.use('/', paypalRoutes);
 router.use('/', warriorplusRoutes);
 
 // ============================================================================
+// DYNAMIC CONTENT ENDPOINTS
+// ============================================================================
+
+// Get dynamic content for plugin
+router.get('/dynamic-content', async (req, res) => {
+  try {
+    const { license_type = 'all', plugin_version = '2.0.1' } = req.query;
+    
+    console.log('🎨 Dynamic content request:', { license_type, plugin_version });
+    
+    // Query dynamic content based on license type and plugin version
+    const contentResult = await db.query(`
+      SELECT content_key, content_value, content_type
+      FROM dynamic_content 
+      WHERE is_active = true 
+        AND (license_type = $1 OR license_type = 'all')
+        AND (plugin_version_min IS NULL OR plugin_version_min <= $2)
+        AND (plugin_version_max IS NULL OR plugin_version_max >= $2)
+      ORDER BY content_key
+    `, [license_type, plugin_version]);
+    
+    // Format content for easy consumption
+    const content = {};
+    contentResult.rows.forEach(row => {
+      content[row.content_key] = {
+        value: row.content_value,
+        type: row.content_type
+      };
+    });
+    
+    res.json({
+      success: true,
+      content: content,
+      license_type: license_type,
+      plugin_version: plugin_version
+    });
+    
+  } catch (error) {
+    console.error('❌ Dynamic content fetch error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to fetch dynamic content'
+    });
+  }
+});
+
+// Update dynamic content (admin endpoint)
+router.post('/admin/dynamic-content', async (req, res) => {
+  try {
+    const { admin_key, content_key, content_value, content_type = 'text', license_type = 'all' } = req.body;
+    
+    // Verify admin access
+    if (admin_key !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    if (!content_key || !content_value) {
+      return res.json({ success: false, message: 'Content key and value required' });
+    }
+    
+    console.log('🎨 Updating dynamic content:', { content_key, content_value, content_type, license_type });
+    
+    // Update or insert content
+    const result = await db.query(`
+      INSERT INTO dynamic_content (content_key, content_value, content_type, license_type, is_active, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, true, NOW(), NOW())
+      ON CONFLICT (content_key, license_type) 
+      DO UPDATE SET 
+        content_value = $2,
+        content_type = $3,
+        updated_at = NOW()
+      RETURNING *
+    `, [content_key, content_value, content_type, license_type]);
+    
+    res.json({
+      success: true,
+      message: 'Dynamic content updated successfully',
+      content: result.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('❌ Dynamic content update error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to update dynamic content'
+    });
+  }
+});
+
+// Get all dynamic content for admin dashboard
+router.get('/admin/dynamic-content', async (req, res) => {
+  try {
+    const { admin_key } = req.query;
+    
+    // Verify admin access
+    if (admin_key !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    const contentResult = await db.query(`
+      SELECT * FROM dynamic_content 
+      ORDER BY license_type, content_key
+    `);
+    
+    res.json({
+      success: true,
+      content: contentResult.rows
+    });
+    
+  } catch (error) {
+    console.error('❌ Dynamic content fetch error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to fetch dynamic content'
+    });
+  }
+});
+
+// ============================================================================
 // LICENSE VALIDATION AND MANAGEMENT
 // ============================================================================
 
@@ -778,11 +897,29 @@ async function initializeDatabase() {
       )
     `);
 
+    // Create dynamic_content table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS dynamic_content (
+        id SERIAL PRIMARY KEY,
+        content_key VARCHAR(255) UNIQUE NOT NULL,
+        content_value TEXT NOT NULL,
+        content_type VARCHAR(50) NOT NULL,
+        license_type VARCHAR(50) NOT NULL,
+        is_active BOOLEAN DEFAULT true,
+        plugin_version_min VARCHAR(50),
+        plugin_version_max VARCHAR(50),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     // Create indexes for performance
     await db.query('CREATE INDEX IF NOT EXISTS idx_licenses_license_key ON licenses(license_key)');
     await db.query('CREATE INDEX IF NOT EXISTS idx_licenses_customer_email ON licenses(customer_email)');
     await db.query('CREATE INDEX IF NOT EXISTS idx_site_usage_license_key ON site_usage(license_key)');
     await db.query('CREATE INDEX IF NOT EXISTS idx_purchase_history_license_id ON purchase_history(license_id)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_dynamic_content_content_key ON dynamic_content(content_key)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_dynamic_content_license_type ON dynamic_content(license_type)');
 
     console.log('✅ Database schema initialized successfully');
 
