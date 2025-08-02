@@ -14,6 +14,10 @@ class AdminDashboard {
     init() {
         this.bindEvents();
         this.checkSystemHealth();
+        
+        // Add route testing for debugging
+        setTimeout(() => testRoutes(), 2000);
+        
         loadDynamicContent();
         initializePreview();
         setupRealtimePreview(); // Add this line
@@ -931,7 +935,7 @@ class AdminDashboard {
 
             this.showLoading();
 
-            const response = await fetch('/admin/dynamic-content', {
+            const response = await fetch('/admin/api/dynamic-content', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -985,7 +989,7 @@ class AdminDashboard {
                 is_active: isActive
             };
 
-            const response = await fetch('/admin/dynamic-content', {
+            const response = await fetch('/admin/api/dynamic-content', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1019,7 +1023,7 @@ class AdminDashboard {
                 is_active: false // Deactivate instead of delete for safety
             };
 
-            const response = await fetch('/admin/dynamic-content', {
+            const response = await fetch('/admin/api/dynamic-content', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1163,7 +1167,7 @@ async function updateContent(contentKey) {
         
 
         
-        const response = await fetch('/admin/dynamic-content', {
+        const response = await fetch('/admin/api/dynamic-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1369,7 +1373,7 @@ async function updateContentWithPreview(contentKey) {
         });
         
         // Send to database
-        const response = await fetch('/admin/dynamic-content', {
+        const response = await fetch('/admin/api/dynamic-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1408,6 +1412,49 @@ async function updateContentWithPreview(contentKey) {
     } catch (error) {
         console.error('💥 Critical error:', error);
         showContentMessage('Update failed - check browser console for details', 'error');
+    }
+}
+
+// Add this function for testing routes
+async function testRoutes() {
+    try {
+        console.log('🧪 Testing API routes...');
+        
+        // Test simple GET route
+        const getResponse = await fetch('/admin/api/test-route');
+        console.log('📡 GET test status:', getResponse.status);
+        const getData = await getResponse.json();
+        console.log('📋 GET test data:', getData);
+        
+        // Test POST route
+        const postResponse = await fetch('/admin/api/test-route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ test: 'data' })
+        });
+        console.log('📡 POST test status:', postResponse.status);
+        const postData = await postResponse.json();
+        console.log('📋 POST test data:', postData);
+        
+        // Test the actual dynamic content route
+        const dynamicResponse = await fetch(`/admin/api/dynamic-content?admin_key=${adminDashboard.adminKey}`);
+        console.log('📡 Dynamic content status:', dynamicResponse.status);
+        
+        if (dynamicResponse.status === 404) {
+            console.error('❌ Dynamic content route not found - check route mounting in app.js');
+        } else {
+            const dynamicData = await dynamicResponse.json();
+            console.log('📋 Dynamic content data:', dynamicData);
+        }
+        
+        // Test debug routes endpoint
+        const debugResponse = await fetch('/admin/api/debug-routes');
+        console.log('📡 Debug routes status:', debugResponse.status);
+        const debugData = await debugResponse.json();
+        console.log('📋 Available routes:', debugData);
+        
+    } catch (error) {
+        console.error('💥 Route test error:', error);
     }
 }
 
