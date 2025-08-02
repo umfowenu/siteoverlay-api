@@ -36,21 +36,33 @@ router.get('/dynamic-content', adminAuth, async (req, res) => {
   try {
     const db = require('../../../db');
     
+    console.log('📥 GET dynamic content request, admin_key provided:', req.query.admin_key ? 'YES' : 'NO');
+    console.log('✅ Admin key validated, querying database...');
+    
     const contentResult = await db.query(`
-      SELECT * FROM dynamic_content 
-      ORDER BY license_type, content_key
+      SELECT content_key, content_value, content_type, license_type, is_active 
+      FROM dynamic_content 
+      WHERE is_active = true
+      ORDER BY content_key
     `);
+    
+    console.log('📊 Database query result:', {
+      rowCount: contentResult.rowCount,
+      rows: contentResult.rows
+    });
     
     res.json({
       success: true,
-      content: contentResult.rows
+      content: contentResult.rows,
+      count: contentResult.rowCount
     });
     
   } catch (error) {
     console.error('❌ Dynamic content fetch error:', error);
     res.json({
       success: false,
-      message: 'Failed to fetch dynamic content'
+      message: 'Failed to fetch dynamic content',
+      error: error.message
     });
   }
 });
@@ -149,6 +161,39 @@ router.get('/test-database', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('Database test error:', error);
     res.status(500).json({ success: false, message: 'Database connection failed', error: error.message });
+  }
+});
+
+// Debug endpoint to see raw database content
+router.get('/debug-content', adminAuth, async (req, res) => {
+  try {
+    const db = require('../../../db');
+    
+    // Get ALL content (including inactive)
+    const allContent = await db.query('SELECT * FROM dynamic_content ORDER BY created_at DESC');
+    
+    // Get table structure
+    const tableInfo = await db.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'dynamic_content'
+      ORDER BY ordinal_position
+    `);
+    
+    res.json({
+      success: true,
+      all_content: allContent.rows,
+      table_structure: tableInfo.rows,
+      total_records: allContent.rowCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Debug content error:', error);
+    res.json({
+      success: false,
+      message: 'Debug failed',
+      error: error.message
+    });
   }
 });
 

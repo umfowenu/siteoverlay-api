@@ -18,20 +18,27 @@ class AdminDashboard {
         // Add route testing for debugging
         setTimeout(() => testRoutes(), 2000);
         
-        loadDynamicContent();
-        initializePreview();
-        setupRealtimePreview(); // Add this line
-        
-        // Load dashboard data first, then auto-load tables
+        // Load dashboard data first, then load dynamic content when admin key is ready
         this.loadDashboard().then(() => {
-            // Auto-load data after dashboard is ready
+            console.log('📊 Dashboard loaded, admin key available:', this.adminKey ? 'YES' : 'NO');
+            
             if (this.adminKey) {
+                // Load dynamic content AFTER admin key is confirmed
+                setTimeout(() => {
+                    console.log('⏰ Loading dynamic content with delay...');
+                    loadDynamicContent();
+                }, 500);
+                
                 this.loadPurchasers();
                 this.loadTrials();
+            } else {
+                console.error('❌ No admin key available - cannot load dynamic content');
             }
         });
         
-        // Initialize software type management
+        // Initialize preview and real-time updates
+        initializePreview();
+        setupRealtimePreview();
         updateInterfaceLabel();
     }
 
@@ -1126,30 +1133,40 @@ document.head.appendChild(style);
 // Dynamic Content Management Functions
 async function loadDynamicContent() {
     try {
-        const response = await fetch(`/admin/dynamic-content?admin_key=${adminDashboard.adminKey}`);
+        console.log('📥 Loading dynamic content from database...');
+        console.log('🔑 Admin key available:', adminDashboard.adminKey ? 'YES' : 'NO');
+        
+        const response = await fetch(`/admin/api/dynamic-content?admin_key=${adminDashboard.adminKey}`);
+        console.log('📡 Load response status:', response.status);
+        
         const data = await response.json();
+        console.log('📋 Loaded data:', data);
         
         if (data.success) {
-            // Only populate editable fields
-            const fieldIds = [
-                'preview_title_text', 'preview_description_text', 'preview_button_text', 'xagio_affiliate_url',
-                'metabox_boost_title', 'metabox_boost_subtitle', 'metabox_button_text', 'metabox_affiliate_url',
-                'upgrade_message', 'support_url', 'training_url'
-            ];
+            console.log('✅ Content loaded successfully, items:', data.content.length);
             
+            // Debug each content item
             data.content.forEach(item => {
+                console.log(`🔍 Loading item: ${item.content_key} = "${item.content_value}"`);
                 const element = document.getElementById(item.content_key);
                 if (element) {
                     element.value = item.content_value;
+                    console.log(`✅ Set ${item.content_key} to: "${element.value}"`);
+                } else {
+                    console.warn(`⚠️ Element not found for key: ${item.content_key}`);
                 }
             });
             
             // Update preview with loaded values
+            console.log('🔄 Updating preview with loaded content...');
             setTimeout(() => updatePreviewContent(), 100);
+            
         } else {
+            console.error('❌ Failed to load content:', data.message);
             showContentMessage('Failed to load dynamic content', 'error');
         }
     } catch (error) {
+        console.error('💥 Load error:', error);
         showContentMessage('Error loading dynamic content', 'error');
     }
 }
@@ -1455,6 +1472,28 @@ async function testRoutes() {
         
     } catch (error) {
         console.error('💥 Route test error:', error);
+    }
+}
+
+// Database connection test function
+async function testDatabaseConnection() {
+    try {
+        console.log('🗄️ Testing database connection...');
+        
+        const response = await fetch(`/admin/api/test-database?admin_key=${adminDashboard.adminKey}`);
+        console.log('📡 Database test status:', response.status);
+        
+        const data = await response.json();
+        console.log('📋 Database test result:', data);
+        
+        if (data.success) {
+            showContentMessage(`Database connected! Found ${data.total_records} records.`, 'success');
+        } else {
+            showContentMessage(`Database error: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('💥 Database test error:', error);
+        showContentMessage('Database test failed', 'error');
     }
 }
 
