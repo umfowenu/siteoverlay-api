@@ -1251,8 +1251,9 @@ main .dynamic-content-management {
 
 /* Content Section Headers */
 .content-section-header {
-    background: #2c3e50;
-    color: white;
+    background: #e8f4f8;
+    color: #2c3e50;
+    border: 2px solid #3498db;
     padding: 15px 20px;
     margin: 30px 0 15px 0;
     border-radius: 8px;
@@ -1295,6 +1296,70 @@ main .dynamic-content-management {
     font-size: 0.85em;
     color: #666;
     text-align: center;
+}
+
+/* Overlay URL Section Mockup */
+.mockup-overlay-section {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 4px;
+}
+
+.mockup-overlay-status {
+    color: #28a745;
+    font-weight: 500;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.mockup-url-display label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 4px;
+    font-size: 0.85em;
+    color: #495057;
+}
+
+.mockup-url-input {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    font-size: 0.8em;
+    background: #fff;
+    margin-bottom: 8px;
+}
+
+.mockup-url-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.mockup-btn {
+    padding: 4px 8px;
+    font-size: 0.75em;
+    border: 1px solid #6c757d;
+    background: #fff;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #495057;
+}
+
+.mockup-btn-edit { 
+    border-color: #007bff; 
+    color: #007bff; 
+}
+
+.mockup-btn-preview { 
+    border-color: #28a745; 
+    color: #28a745; 
+}
+
+.mockup-btn-remove { 
+    border-color: #dc3545; 
+    color: #dc3545; 
 }
 
 /* Responsive adjustments */
