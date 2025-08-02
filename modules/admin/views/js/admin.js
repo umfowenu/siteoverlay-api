@@ -1118,26 +1118,31 @@ document.head.appendChild(style);
 // Dynamic Content Management Functions
 async function loadDynamicContent() {
     try {
-
-        
         const response = await fetch(`/admin/dynamic-content?admin_key=${adminDashboard.adminKey}`);
         const data = await response.json();
         
         if (data.success) {
-
+            // Populate ALL form fields with current values from database
+            const fieldIds = [
+                'preview_title_text', 'preview_description_text', 'preview_button_text', 'xagio_affiliate_url',
+                'metabox_status_text', 'metabox_views_prefix', 'metabox_boost_title', 'metabox_boost_subtitle',
+                'metabox_button_text', 'metabox_affiliate_url', 'metabox_stats_prefix',
+                'upgrade_message', 'support_url', 'training_url'
+            ];
             
-            // Populate the form fields with current values
             data.content.forEach(item => {
                 const element = document.getElementById(item.content_key);
                 if (element) {
                     element.value = item.content_value;
                 }
             });
+            
+            // Update preview with loaded values
+            setTimeout(() => updatePreviewContent(), 100);
         } else {
             showContentMessage('Failed to load dynamic content', 'error');
         }
     } catch (error) {
-        console.error('❌ Error loading dynamic content:', error);
         showContentMessage('Error loading dynamic content', 'error');
     }
 }
@@ -1309,43 +1314,62 @@ function updatePreview() {
 }
 
 function updatePreviewContent() {
-    // Add basic preview content update
-    
-    
     try {
+        // Get all field values
+        const previewTitle = document.getElementById('preview_title_text')?.value || '🚀 Get Premium';
+        const previewDesc = document.getElementById('preview_description_text')?.value || 'Upgrade to unlock all features';
+        const previewButton = document.getElementById('preview_button_text')?.value || 'Get Premium Now';
         const affiliateUrl = document.getElementById('xagio_affiliate_url')?.value || '';
-        const companyName = extractCompanyName(affiliateUrl) || 'Premium';
         
-        // Update preview elements if they exist
-        const elements = {
-            'preview-affiliate-name': `Get ${companyName}`,
-            'preview-affiliate-button': `Get ${companyName} Now`,
-            'preview-meta-button': `Get ${companyName} Now`
-        };
+        const metaboxStatus = document.getElementById('metabox_status_text')?.value || '✓ SiteOverlay Pro Active';
+        const metaboxViewsPrefix = document.getElementById('metabox_views_prefix')?.value || '👁';
+        const metaboxTitle = document.getElementById('metabox_boost_title')?.value || '🚀 Boost Your Rankings';
+        const metaboxSubtitle = document.getElementById('metabox_boost_subtitle')?.value || 'Get the #1 tool for success';
+        const metaboxButton = document.getElementById('metabox_button_text')?.value || 'Get Premium Now';
+        const metaboxUrl = document.getElementById('metabox_affiliate_url')?.value || '';
+        const metaboxStatsPrefix = document.getElementById('metabox_stats_prefix')?.value || 'Views:';
         
-        Object.entries(elements).forEach(([id, text]) => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.textContent = text;
+        // Update Settings Page Preview
+        const titleDisplay = document.getElementById('preview-title-display');
+        const descDisplay = document.getElementById('preview-description-display');
+        const buttonDisplay = document.getElementById('preview-button-display');
+        
+        if (titleDisplay) titleDisplay.textContent = previewTitle;
+        if (descDisplay) descDisplay.textContent = previewDesc;
+        if (buttonDisplay) {
+            buttonDisplay.textContent = previewButton;
+            if (affiliateUrl) {
+                buttonDisplay.onclick = () => window.open(affiliateUrl, '_blank');
             }
-        });
+        }
         
-
+        // Update Meta Box Preview
+        const statusDisplay = document.getElementById('preview-metabox-status');
+        const viewsPrefixDisplay = document.getElementById('preview-metabox-views-prefix');
+        const titleMetaDisplay = document.getElementById('preview-metabox-title');
+        const subtitleMetaDisplay = document.getElementById('preview-metabox-subtitle');
+        const buttonMetaDisplay = document.getElementById('preview-metabox-button');
+        const statsPrefixDisplay = document.getElementById('preview-metabox-stats-prefix');
+        
+        if (statusDisplay) statusDisplay.textContent = metaboxStatus;
+        if (viewsPrefixDisplay) viewsPrefixDisplay.textContent = metaboxViewsPrefix;
+        if (titleMetaDisplay) titleMetaDisplay.textContent = metaboxTitle;
+        if (subtitleMetaDisplay) subtitleMetaDisplay.textContent = metaboxSubtitle;
+        if (buttonMetaDisplay) {
+            buttonMetaDisplay.textContent = metaboxButton;
+            if (metaboxUrl) {
+                buttonMetaDisplay.onclick = () => window.open(metaboxUrl, '_blank');
+            }
+        }
+        if (statsPrefixDisplay) statsPrefixDisplay.textContent = metaboxStatsPrefix;
+        
     } catch (error) {
-        console.error('❌ Preview update error:', error);
+        // Preview update failed silently
     }
 }
 
-function extractCompanyName(url) {
-    if (!url) return null;
-    try {
-        const domain = new URL(url).hostname.replace('www.', '');
-        const name = domain.split('.')[0];
-        return name.charAt(0).toUpperCase() + name.slice(1);
-    } catch {
-        return null;
-    }
-}
+// REMOVED - Don't auto-extract company names from URLs
+// function extractCompanyName(url) { ... }
 
 function updatePreviewText() {
     // Keep old function for compatibility

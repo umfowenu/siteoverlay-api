@@ -1249,6 +1249,54 @@ main .dynamic-content-management {
     border: 1px solid #f5c6cb;
 }
 
+/* Content Section Headers */
+.content-section-header {
+    background: #2c3e50;
+    color: white;
+    padding: 15px 20px;
+    margin: 30px 0 15px 0;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.content-section-header h2 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+/* Enhanced Mockup Styles */
+.mockup-header {
+    background: #3498db;
+    color: white;
+    padding: 8px 12px;
+    font-weight: bold;
+    border-radius: 4px 4px 0 0;
+    text-align: center;
+}
+
+.mockup-status {
+    padding: 8px;
+    background: #d4edda;
+    color: #155724;
+    border-left: 4px solid #28a745;
+    margin: 5px 0;
+}
+
+.mockup-views {
+    padding: 5px 8px;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.mockup-stats {
+    padding: 8px;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    font-size: 0.85em;
+    color: #666;
+    text-align: center;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .add-content-form {
