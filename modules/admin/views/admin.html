@@ -61,6 +61,23 @@
                 </div>
             </section>
 
+            <!-- Software Type Management Filter -->
+            <div class="software-management-header">
+                <div class="software-type-selector">
+                    <label for="softwareTypeFilter"><i class="fas fa-layer-group"></i> Management Interface:</label>
+                    <select id="softwareTypeFilter" class="form-select" onchange="switchSoftwareInterface()">
+                        <option value="wordpress_plugin" selected>WordPress Plugins</option>
+                        <option value="web_app" disabled>Web Apps (Coming Soon)</option>
+                        <option value="chrome_extension" disabled>Chrome Extensions (Coming Soon)</option>
+                        <option value="mobile_app" disabled>Mobile Apps (Coming Soon)</option>
+                        <option value="desktop_app" disabled>Desktop Apps (Coming Soon)</option>
+                    </select>
+                </div>
+                <div class="current-interface-indicator">
+                    <span id="currentInterfaceLabel">WordPress Plugin Management</span>
+                </div>
+            </div>
+
             <!-- License Management -->
             <section class="license-management">
                 <div class="section-header">

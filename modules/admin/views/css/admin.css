@@ -1362,6 +1362,65 @@ main .dynamic-content-management {
     color: #dc3545; 
 }
 
+/* Software Type Management Header */
+.software-management-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.software-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.software-type-selector label {
+    font-weight: 500;
+    margin: 0;
+    color: white;
+}
+
+.software-type-selector .form-select {
+    background: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    min-width: 200px;
+    font-weight: 500;
+}
+
+.current-interface-indicator {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.current-interface-indicator::before {
+    content: '🎯 ';
+    margin-right: 5px;
+}
+
+/* Disabled options styling */
+.form-select option:disabled {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.content-message.info {
+    background: #cce7ff;
+    color: #004085;
+    border: 1px solid #99d1ff;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .add-content-form {

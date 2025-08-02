@@ -25,6 +25,9 @@ class AdminDashboard {
                 this.loadTrials();
             }
         });
+        
+        // Initialize software type management
+        updateInterfaceLabel();
     }
 
     getAdminKey() {
@@ -1380,4 +1383,114 @@ function updatePreviewText() {
 async function updateContentWithPreview(contentKey) {
     await updateContent(contentKey);
     updatePreviewText();
+}
+
+// Software Type Management
+let currentSoftwareType = 'wordpress_plugin';
+
+function switchSoftwareInterface() {
+    const selector = document.getElementById('softwareTypeFilter');
+    const newType = selector.value;
+    
+    if (newType === currentSoftwareType) return;
+    
+    // Show coming soon message for disabled options
+    if (selector.options[selector.selectedIndex].disabled) {
+        showContentMessage('This interface is coming soon! Currently in development.', 'info');
+        selector.value = currentSoftwareType; // Reset to current
+        return;
+    }
+    
+    currentSoftwareType = newType;
+    updateInterfaceLabel();
+    loadSoftwareSpecificInterface();
+}
+
+function updateInterfaceLabel() {
+    const labels = {
+        'wordpress_plugin': 'WordPress Plugin Management',
+        'web_app': 'Web Application Management',
+        'chrome_extension': 'Chrome Extension Management',
+        'mobile_app': 'Mobile App Management',
+        'desktop_app': 'Desktop Application Management'
+    };
+    
+    const labelElement = document.getElementById('currentInterfaceLabel');
+    if (labelElement) {
+        labelElement.textContent = labels[currentSoftwareType] || 'Unknown Interface';
+    }
+}
+
+function loadSoftwareSpecificInterface() {
+    switch(currentSoftwareType) {
+        case 'wordpress_plugin':
+            loadWordPressInterface();
+            break;
+        case 'web_app':
+            loadWebAppInterface(); // Future implementation
+            break;
+        case 'chrome_extension':
+            loadChromeExtensionInterface(); // Future implementation
+            break;
+        default:
+            loadWordPressInterface(); // Default fallback
+    }
+}
+
+function loadWordPressInterface() {
+    // Current dynamic content management (unchanged)
+    loadDynamicContent();
+    initializePreview();
+    
+    // Show WordPress-specific sections
+    showWordPressControls();
+}
+
+function showWordPressControls() {
+    // Ensure WordPress-specific sections are visible
+    const dynamicSection = document.querySelector('.dynamic-content-management');
+    const previewSection = document.querySelector('.plugin-preview');
+    
+    if (dynamicSection) dynamicSection.style.display = 'block';
+    if (previewSection) previewSection.style.display = 'block';
+}
+
+// Future placeholder functions
+function loadWebAppInterface() {
+    showContentMessage('Web App interface is under development. WordPress interface loaded instead.', 'info');
+    loadWordPressInterface();
+}
+
+function loadChromeExtensionInterface() {
+    showContentMessage('Chrome Extension interface is under development. WordPress interface loaded instead.', 'info');
+    loadWordPressInterface();
+}
+
+// Enhanced content message function
+function showContentMessage(message, type = 'info') {
+    const messageDiv = document.getElementById('contentMessage') || createMessageDiv();
+    
+    messageDiv.textContent = message;
+    messageDiv.className = `content-message ${type}`;
+    messageDiv.style.display = 'block';
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 5000);
+}
+
+function createMessageDiv() {
+    const div = document.createElement('div');
+    div.id = 'contentMessage';
+    div.className = 'content-message';
+    div.style.display = 'none';
+    
+    // Insert after the software management header
+    const header = document.querySelector('.software-management-header');
+    if (header) {
+        header.parentNode.insertBefore(div, header.nextSibling);
+    }
+    
+    return div;
 } 
