@@ -28,6 +28,16 @@ const warriorplusRoutes = require('./routes/warriorplus');
 
 // (All old utility function definitions are now removed from the bottom of the file, only initializeDatabase and module.exports = router remain)
 
+// Test route to verify public API access
+router.get('/test-public', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: 'Public API is working!',
+        timestamp: new Date().toISOString(),
+        cors_test: 'OK'
+    });
+});
+
 // Payment processor integrations
 
 // Health check endpoint
@@ -1047,6 +1057,8 @@ initializeDatabase();
 // Public dynamic content endpoint for plugin access
 router.get('/api/dynamic-content-public', async (req, res) => {
   try {
+    console.log('Public endpoint accessed'); // Debug log
+    
     const contentResult = await db.query(`
       SELECT content_key, content_value, content_type 
       FROM dynamic_content 
@@ -1054,16 +1066,20 @@ router.get('/api/dynamic-content-public', async (req, res) => {
       ORDER BY content_key
     `);
     
+    console.log('Content rows found:', contentResult.rowCount); // Debug log
+    
     res.json({
       success: true,
-      content: contentResult.rows
+      content: contentResult.rows,
+      count: contentResult.rowCount
     });
     
   } catch (error) {
     console.error('Public dynamic content fetch error:', error);
     res.json({
       success: false,
-      message: 'Failed to fetch content'
+      message: 'Failed to fetch content',
+      error: error.message
     });
   }
 });
