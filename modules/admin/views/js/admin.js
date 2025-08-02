@@ -1,4 +1,20 @@
 // Admin Dashboard JavaScript
+console.log('🔍 DEBUG: Admin.js loaded');
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔍 DEBUG: DOM loaded');
+    
+    // Check if AdminDashboard initializes
+    setTimeout(() => {
+        console.log('🔍 DEBUG: Checking dashboard after 2 seconds');
+        if (window.dashboard) {
+            console.log('🔍 DEBUG: Dashboard exists, admin key:', window.dashboard.adminKey);
+        } else {
+            console.log('🔍 DEBUG: Dashboard not found');
+        }
+    }, 2000);
+});
+
 class AdminDashboard {
     constructor() {
         this.adminKey = this.getAdminKey();
@@ -12,11 +28,35 @@ class AdminDashboard {
     trialsData = [];
 
     init() {
+        console.log('🔍 DEBUG: Init starting, admin key:', this.adminKey);
+        
         this.bindEvents();
         this.loadDashboard();
         this.checkSystemHealth();
         loadDynamicContent();
         initializePreview();
+        
+        // Auto-load purchasers and trials data with proper timing
+        if (this.adminKey) {
+            console.log('🔍 DEBUG: Admin key available, scheduling data load...');
+            setTimeout(() => {
+                console.log('🔍 DEBUG: Loading purchasers and trials...');
+                this.loadPurchasers();
+                this.loadTrials();
+            }, 1000); // Delay to ensure everything is ready
+        } else {
+            console.error('🔍 DEBUG: Admin key not available on init, retrying...');
+            // Try again after a delay in case admin key is set later
+            setTimeout(() => {
+                if (this.adminKey) {
+                    console.log('🔍 DEBUG: Admin key now available, loading data...');
+                    this.loadPurchasers();
+                    this.loadTrials();
+                } else {
+                    console.error('🔍 DEBUG: Admin key still not available after retry');
+                }
+            }, 3000);
+        }
         
         // Debug: Force show dynamic content section
         const dynamicSection = document.querySelector('.dynamic-content-management');
@@ -116,8 +156,8 @@ class AdminDashboard {
             if (data.success) {
                 this.updateStats(data.stats);
                 this.updateRecentLicenses(data.recent_licenses);
-                this.loadPurchasers(); // Auto-load purchasers
-                this.loadTrials();     // Auto-load trials
+                // Remove duplicate auto-load calls (now handled in init)
+                console.log('🔍 DEBUG: Dashboard data loaded successfully');
             } else {
                 this.showError('Failed to load dashboard data');
             }
@@ -627,7 +667,20 @@ class AdminDashboard {
     // Load all purchasers
     async loadPurchasers(sortBy = null, sortOrder = null) {
         try {
+            // Check admin key first
+            if (!this.adminKey) {
+                console.error('🔍 DEBUG: No admin key available for loadPurchasers');
+                document.getElementById('purchasersTable').innerHTML = 
+                    '<p style="color: orange;"><i class="fas fa-key"></i> Admin key required. Please refresh with admin_key parameter.</p>';
+                return;
+            }
+            
             console.log('🔍 DEBUG: Loading purchasers...');
+            
+            // Show loading state
+            document.getElementById('purchasersTable').innerHTML = 
+                '<p><i class="fas fa-spinner fa-spin"></i> Loading purchasers...</p>';
+            
             const sort = sortBy || this.currentPurchasersSort.column;
             const order = sortOrder || this.currentPurchasersSort.direction;
             
@@ -646,16 +699,35 @@ class AdminDashboard {
                 console.log('🔍 DEBUG: Found purchasers:', data.purchasers.length);
                 this.displayPurchasersTable(data.purchasers, sort, order);
             } else {
-                console.error('🔍 DEBUG: API returned success: false');
+                console.error('🔍 DEBUG: API returned success: false, message:', data.message);
+                document.getElementById('purchasersTable').innerHTML = 
+                    `<p style="color: orange;">API Error: ${data.message || 'Failed to load purchasers'}</p>`;
             }
         } catch (error) {
-            console.error('Error loading purchasers:', error);
+            console.error('🔍 DEBUG: LoadPurchasers error:', error);
+            // Show user-friendly error message
+            document.getElementById('purchasersTable').innerHTML = 
+                '<p style="color: red;"><i class="fas fa-exclamation-triangle"></i> Error loading purchasers. Please refresh.</p>';
         }
     }
 
     // Load all trials
     async loadTrials(sortBy = null, sortOrder = null) {
         try {
+            // Check admin key first
+            if (!this.adminKey) {
+                console.error('🔍 DEBUG: No admin key available for loadTrials');
+                document.getElementById('trialsTable').innerHTML = 
+                    '<p style="color: orange;"><i class="fas fa-key"></i> Admin key required. Please refresh with admin_key parameter.</p>';
+                return;
+            }
+            
+            console.log('🔍 DEBUG: Loading trials...');
+            
+            // Show loading state
+            document.getElementById('trialsTable').innerHTML = 
+                '<p><i class="fas fa-spinner fa-spin"></i> Loading trials...</p>';
+            
             const sort = sortBy || this.currentTrialsSort.column;
             const order = sortOrder || this.currentTrialsSort.direction;
             
@@ -665,10 +737,18 @@ class AdminDashboard {
             if (data.success) {
                 this.trialsData = data.trials;
                 this.currentTrialsSort = { column: sort, direction: order };
+                console.log('🔍 DEBUG: Found trials:', data.trials.length);
                 this.displayTrialsTable(data.trials, sort, order);
+            } else {
+                console.error('🔍 DEBUG: API returned success: false, message:', data.message);
+                document.getElementById('trialsTable').innerHTML = 
+                    `<p style="color: orange;">API Error: ${data.message || 'Failed to load trials'}</p>`;
             }
         } catch (error) {
-            console.error('Error loading trials:', error);
+            console.error('🔍 DEBUG: LoadTrials error:', error);
+            // Show user-friendly error message
+            document.getElementById('trialsTable').innerHTML = 
+                '<p style="color: red;"><i class="fas fa-exclamation-triangle"></i> Error loading trials. Please refresh.</p>';
         }
     }
 
