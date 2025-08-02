@@ -970,6 +970,18 @@ class AdminDashboard {
                 this.showSuccess(data.message);
                 this.clearContentForm();
                 this.loadDynamicContent(); // Refresh the content list
+                
+                // Clear plugin cache to show changes immediately
+                try {
+                    await fetch('/api/plugin-cache-clear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ admin_key: this.adminKey })
+                    });
+                    console.log('🔄 Plugin cache cleared');
+                } catch (e) {
+                    console.log('⚠️ Plugin cache clear failed:', e);
+                }
             } else {
                 this.showError(data.error || 'Failed to save content');
             }
@@ -1138,7 +1150,7 @@ async function loadDynamicContent() {
     try {
         console.log('📝 Loading dynamic content...');
         
-        const response = await fetch(`/admin/api/dynamic-content?admin_key=${dashboard.adminKey}`);
+        const response = await fetch(`/admin/dynamic-content?admin_key=${dashboard.adminKey}`);
         const data = await response.json();
         
         if (data.success) {
@@ -1173,7 +1185,7 @@ async function updateContent(contentKey) {
         
         console.log('💾 Updating content:', { contentKey, contentValue, contentType });
         
-        const response = await fetch('/admin/api/dynamic-content', {
+        const response = await fetch('/admin/dynamic-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1190,6 +1202,18 @@ async function updateContent(contentKey) {
         if (data.success) {
             showContentMessage(`${contentKey.replace('_', ' ')} updated successfully!`, 'success');
             console.log('✅ Content updated:', data.content);
+            
+            // Clear plugin cache to show changes immediately
+            try {
+                await fetch('/api/plugin-cache-clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_key: dashboard.adminKey })
+                });
+                console.log('🔄 Plugin cache cleared');
+            } catch (e) {
+                console.log('⚠️ Plugin cache clear failed:', e);
+            }
         } else {
             showContentMessage(`Failed to update: ${data.message}`, 'error');
         }
@@ -1213,7 +1237,7 @@ async function addNewContent() {
         
         console.log('➕ Adding new content:', { contentKey, contentValue, contentType, licenseType });
         
-        const response = await fetch('/admin/api/dynamic-content', {
+        const response = await fetch('/admin/dynamic-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
