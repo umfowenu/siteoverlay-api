@@ -1055,7 +1055,7 @@ initializeDatabase();
  */
 
 // Public dynamic content endpoint for plugin access
-router.get('/api/dynamic-content-public', async (req, res) => {
+router.get('/dynamic-content-public', async (req, res) => {
   try {
     console.log('Public endpoint accessed'); // Debug log
     
