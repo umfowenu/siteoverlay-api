@@ -20,12 +20,10 @@ class AdminDashboard {
         // Load dashboard data first, then auto-load tables
         this.loadDashboard().then(() => {
             // Auto-load data after dashboard is ready
-            setTimeout(() => {
-                if (this.adminKey) {
-                    this.loadPurchasers();
-                    this.loadTrials();
-                }
-            }, 500);
+            if (this.adminKey) {
+                this.loadPurchasers();
+                this.loadTrials();
+            }
         });
     }
 
@@ -50,7 +48,6 @@ class AdminDashboard {
     bindEvents() {
         // Refresh button
         document.getElementById('refreshBtn').addEventListener('click', () => {
-            // Reload dashboard and data
             this.loadDashboard();
             this.loadPurchasers();
             this.loadTrials();
@@ -65,48 +62,6 @@ class AdminDashboard {
         // Customer search
         document.getElementById('customerSearchBtn').addEventListener('click', () => {
             this.getCustomerData();
-        });
-
-        // Dynamic content management
-        document.getElementById('refreshContentBtn').addEventListener('click', () => {
-            this.loadDynamicContent();
-        });
-
-        document.getElementById('saveContentBtn').addEventListener('click', () => {
-            this.saveDynamicContent();
-        });
-
-        document.getElementById('clearContentBtn').addEventListener('click', () => {
-            this.clearContentForm();
-        });
-
-        document.getElementById('togglePreviewBtn').addEventListener('click', () => {
-            this.togglePluginPreview();
-        });
-
-        // Preview tabs
-        document.querySelectorAll('.preview-tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                this.switchPreviewTab(e.target.dataset.tab);
-            });
-        });
-
-        // Modal events
-        document.querySelector('.close').addEventListener('click', () => {
-            this.closeModal();
-        });
-
-        document.getElementById('modalCancel').addEventListener('click', () => {
-            this.closeModal();
-        });
-
-        // Enter key events
-        document.getElementById('searchQuery').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.searchLicenses();
-        });
-
-        document.getElementById('customerEmail').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.getCustomerData();
         });
     }
 
@@ -994,9 +949,8 @@ class AdminDashboard {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ admin_key: this.adminKey })
                     });
-                    console.log('🔄 Plugin cache cleared');
                 } catch (e) {
-                    console.log('⚠️ Plugin cache clear failed:', e);
+                    // Plugin cache clear failed silently
                 }
             } else {
                 this.showError(data.error || 'Failed to save content');
@@ -1164,13 +1118,13 @@ document.head.appendChild(style);
 // Dynamic Content Management Functions
 async function loadDynamicContent() {
     try {
-        console.log('📝 Loading dynamic content...');
+
         
-        const response = await fetch(`/admin/dynamic-content?admin_key=${dashboard.adminKey}`);
+        const response = await fetch(`/admin/dynamic-content?admin_key=${adminDashboard.adminKey}`);
         const data = await response.json();
         
         if (data.success) {
-            console.log('✅ Dynamic content loaded:', data.content);
+
             
             // Populate the form fields with current values
             data.content.forEach(item => {
@@ -1199,13 +1153,13 @@ async function updateContent(contentKey) {
         const contentValue = element.value.trim();
         const contentType = element.type === 'url' ? 'url' : (element.tagName === 'TEXTAREA' ? 'text' : 'text');
         
-        console.log('💾 Updating content:', { contentKey, contentValue, contentType });
+
         
         const response = await fetch('/admin/dynamic-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                admin_key: dashboard.adminKey,
+                admin_key: adminDashboard.adminKey,
                 content_key: contentKey,
                 content_value: contentValue,
                 content_type: contentType,
@@ -1217,18 +1171,17 @@ async function updateContent(contentKey) {
         
         if (data.success) {
             showContentMessage(`${contentKey.replace('_', ' ')} updated successfully!`, 'success');
-            console.log('✅ Content updated:', data.content);
+
             
             // Clear plugin cache to show changes immediately
             try {
                 await fetch('/api/plugin-cache-clear', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ admin_key: dashboard.adminKey })
+                    body: JSON.stringify({ admin_key: adminDashboard.adminKey })
                 });
-                console.log('🔄 Plugin cache cleared');
             } catch (e) {
-                console.log('⚠️ Plugin cache clear failed:', e);
+                // Plugin cache clear failed silently
             }
         } else {
             showContentMessage(`Failed to update: ${data.message}`, 'error');
@@ -1251,13 +1204,13 @@ async function addNewContent() {
             return;
         }
         
-        console.log('➕ Adding new content:', { contentKey, contentValue, contentType, licenseType });
+
         
         const response = await fetch('/admin/dynamic-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                admin_key: dashboard.adminKey,
+                admin_key: adminDashboard.adminKey,
                 content_key: contentKey,
                 content_value: contentValue,
                 content_type: contentType,
@@ -1309,24 +1262,16 @@ function showContentMessage(message, type) {
 
 // Plugin Preview Functions
 function initializePreview() {
-    console.log('Initializing preview...');
-    
-    // Wait for DOM elements to be ready
     setTimeout(() => {
         const toggleBtn = document.getElementById('togglePreview');
         const previewSection = document.getElementById('pluginPreview');
         
-        console.log('Toggle button:', toggleBtn);
-        console.log('Preview section:', previewSection);
-        
         if (toggleBtn && previewSection) {
-            // Remove any existing listeners
             toggleBtn.replaceWith(toggleBtn.cloneNode(true));
             const newToggleBtn = document.getElementById('togglePreview');
             
             newToggleBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-                console.log('Preview toggle clicked');
                 
                 if (previewSection.style.display === 'none' || previewSection.style.display === '') {
                     previewSection.style.display = 'block';
@@ -1336,13 +1281,6 @@ function initializePreview() {
                     previewSection.style.display = 'none';
                     newToggleBtn.innerHTML = '<i class="fas fa-eye"></i> Show Plugin Preview';
                 }
-            });
-            
-            console.log('✅ Preview toggle initialized successfully');
-        } else {
-            console.error('❌ Preview elements not found:', {
-                toggleBtn: !!toggleBtn,
-                previewSection: !!previewSection
             });
         }
     }, 1000);
@@ -1372,7 +1310,7 @@ function updatePreview() {
 
 function updatePreviewContent() {
     // Add basic preview content update
-    console.log('Updating preview content...');
+    
     
     try {
         const affiliateUrl = document.getElementById('xagio_affiliate_url')?.value || '';
@@ -1392,7 +1330,7 @@ function updatePreviewContent() {
             }
         });
         
-        console.log('✅ Preview content updated');
+
     } catch (error) {
         console.error('❌ Preview update error:', error);
     }
