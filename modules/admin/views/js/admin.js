@@ -1,4 +1,38 @@
-// Admin Dashboard JavaScript
+/**
+ * SiteOverlay Pro - Dynamic Content Management System
+ * 
+ * OVERVIEW:
+ * This system allows real-time management of content displayed in WordPress plugins
+ * through a centralized admin dashboard. Content is stored in PostgreSQL and 
+ * served via API to maintain consistency across all plugin installations.
+ * 
+ * ARCHITECTURE:
+ * - Multi-platform foundation supports WordPress plugins, web apps, Chrome extensions
+ * - Dynamic content system with 8 configurable fields
+ * - Real-time preview updates and database persistence
+ * - Cache management for plugin synchronization
+ * 
+ * KEY FUNCTIONS:
+ * - loadDynamicContent(): Loads content from database on page load
+ * - updateContentWithPreview(): Saves changes and updates preview
+ * - updatePreviewContent(): Updates preview display in real-time
+ * - setupRealtimePreview(): Enables typing-based preview updates
+ * 
+ * CONTENT FIELDS:
+ * Settings Page: preview_title_text, preview_description_text, preview_button_text, xagio_affiliate_url
+ * Meta Box: metabox_boost_title, metabox_boost_subtitle, metabox_button_text, metabox_affiliate_url
+ * Legacy: upgrade_message, support_url, training_url
+ * 
+ * CONSTITUTIONAL COMPLIANCE:
+ * - Non-blocking operations (per .cursorrules)
+ * - Graceful fallbacks for API failures
+ * - Background cache management
+ * - User experience priority
+ * 
+ * @version 2.0
+ * @since 2025-01-01
+ */
+
 class AdminDashboard {
     constructor() {
         this.adminKey = this.getAdminKey();
@@ -15,24 +49,14 @@ class AdminDashboard {
         this.bindEvents();
         this.checkSystemHealth();
         
-        // Add route testing for debugging
-        setTimeout(() => testRoutes(), 2000);
-        
         // Load dashboard data first, then load dynamic content when admin key is ready
         this.loadDashboard().then(() => {
-            console.log('📊 Dashboard loaded, admin key available:', this.adminKey ? 'YES' : 'NO');
-            
             if (this.adminKey) {
                 // Load dynamic content AFTER admin key is confirmed
-                setTimeout(() => {
-                    console.log('⏰ Loading dynamic content with delay...');
-                    loadDynamicContent();
-                }, 500);
+                setTimeout(() => loadDynamicContent(), 500);
                 
                 this.loadPurchasers();
                 this.loadTrials();
-            } else {
-                console.error('❌ No admin key available - cannot load dynamic content');
             }
         });
         
@@ -1133,40 +1157,26 @@ document.head.appendChild(style);
 // Dynamic Content Management Functions
 async function loadDynamicContent() {
     try {
-        console.log('📥 Loading dynamic content from database...');
-        console.log('🔑 Admin key available:', adminDashboard.adminKey ? 'YES' : 'NO');
-        
         const response = await fetch(`/admin/api/dynamic-content?admin_key=${adminDashboard.adminKey}`);
-        console.log('📡 Load response status:', response.status);
-        
         const data = await response.json();
-        console.log('📋 Loaded data:', data);
         
         if (data.success) {
-            console.log('✅ Content loaded successfully, items:', data.content.length);
-            
-            // Debug each content item
+            // Populate form fields with loaded content
             data.content.forEach(item => {
-                console.log(`🔍 Loading item: ${item.content_key} = "${item.content_value}"`);
                 const element = document.getElementById(item.content_key);
                 if (element) {
                     element.value = item.content_value;
-                    console.log(`✅ Set ${item.content_key} to: "${element.value}"`);
-                } else {
-                    console.warn(`⚠️ Element not found for key: ${item.content_key}`);
                 }
             });
             
             // Update preview with loaded values
-            console.log('🔄 Updating preview with loaded content...');
             setTimeout(() => updatePreviewContent(), 100);
             
         } else {
-            console.error('❌ Failed to load content:', data.message);
             showContentMessage('Failed to load dynamic content', 'error');
         }
     } catch (error) {
-        console.error('💥 Load error:', error);
+        console.error('Dynamic content load error:', error);
         showContentMessage('Error loading dynamic content', 'error');
     }
 }
@@ -1362,18 +1372,13 @@ function updatePreviewText() {
 // Enhanced update function with preview refresh
 async function updateContentWithPreview(contentKey) {
     try {
-        console.log('🔄 Updating content:', contentKey);
-        
         const element = document.getElementById(contentKey);
         if (!element) {
-            console.error('❌ Element not found:', contentKey);
             showContentMessage('Content field not found', 'error');
             return;
         }
         
         const contentValue = element.value;
-        console.log('📝 Content value:', contentValue);
-        
         if (!contentValue.trim()) {
             showContentMessage('Content value cannot be empty', 'error');
             return;
@@ -1381,13 +1386,6 @@ async function updateContentWithPreview(contentKey) {
         
         // Determine content type
         const contentType = element.type === 'url' ? 'url' : 'text';
-        
-        console.log('🚀 Sending to API:', {
-            admin_key: adminDashboard.adminKey ? 'SET' : 'MISSING',
-            content_key: contentKey,
-            content_value: contentValue,
-            content_type: contentType
-        });
         
         // Send to database
         const response = await fetch('/admin/api/dynamic-content', {
@@ -1402,9 +1400,7 @@ async function updateContentWithPreview(contentKey) {
             })
         });
         
-        console.log('📡 API Response status:', response.status);
         const data = await response.json();
-        console.log('📋 API Response data:', data);
         
         if (data.success) {
             showContentMessage(`${contentKey.replace('_', ' ')} updated successfully!`, 'success');
@@ -1412,7 +1408,7 @@ async function updateContentWithPreview(contentKey) {
             // Update preview immediately
             updatePreviewContent();
             
-            // Clear plugin cache to show changes
+            // Clear plugin cache to show changes (non-critical)
             try {
                 await fetch('/api/plugin-cache-clear', {
                     method: 'POST',
@@ -1420,82 +1416,18 @@ async function updateContentWithPreview(contentKey) {
                     body: JSON.stringify({ admin_key: adminDashboard.adminKey })
                 });
             } catch (e) {
-                console.log('⚠️ Cache clear failed (non-critical):', e);
+                // Cache clear failed, but content update succeeded
             }
         } else {
-            console.error('❌ Update failed:', data);
             showContentMessage(`Failed to update: ${data.message}`, 'error');
         }
     } catch (error) {
-        console.error('💥 Critical error:', error);
-        showContentMessage('Update failed - check browser console for details', 'error');
+        console.error('Content update error:', error);
+        showContentMessage('Update failed - please try again', 'error');
     }
 }
 
-// Add this function for testing routes
-async function testRoutes() {
-    try {
-        console.log('🧪 Testing API routes...');
-        
-        // Test simple GET route
-        const getResponse = await fetch('/admin/api/test-route');
-        console.log('📡 GET test status:', getResponse.status);
-        const getData = await getResponse.json();
-        console.log('📋 GET test data:', getData);
-        
-        // Test POST route
-        const postResponse = await fetch('/admin/api/test-route', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ test: 'data' })
-        });
-        console.log('📡 POST test status:', postResponse.status);
-        const postData = await postResponse.json();
-        console.log('📋 POST test data:', postData);
-        
-        // Test the actual dynamic content route
-        const dynamicResponse = await fetch(`/admin/api/dynamic-content?admin_key=${adminDashboard.adminKey}`);
-        console.log('📡 Dynamic content status:', dynamicResponse.status);
-        
-        if (dynamicResponse.status === 404) {
-            console.error('❌ Dynamic content route not found - check route mounting in app.js');
-        } else {
-            const dynamicData = await dynamicResponse.json();
-            console.log('📋 Dynamic content data:', dynamicData);
-        }
-        
-        // Test debug routes endpoint
-        const debugResponse = await fetch('/admin/api/debug-routes');
-        console.log('📡 Debug routes status:', debugResponse.status);
-        const debugData = await debugResponse.json();
-        console.log('📋 Available routes:', debugData);
-        
-    } catch (error) {
-        console.error('💥 Route test error:', error);
-    }
-}
 
-// Database connection test function
-async function testDatabaseConnection() {
-    try {
-        console.log('🗄️ Testing database connection...');
-        
-        const response = await fetch(`/admin/api/test-database?admin_key=${adminDashboard.adminKey}`);
-        console.log('📡 Database test status:', response.status);
-        
-        const data = await response.json();
-        console.log('📋 Database test result:', data);
-        
-        if (data.success) {
-            showContentMessage(`Database connected! Found ${data.total_records} records.`, 'success');
-        } else {
-            showContentMessage(`Database error: ${data.message}`, 'error');
-        }
-    } catch (error) {
-        console.error('💥 Database test error:', error);
-        showContentMessage('Database test failed', 'error');
-    }
-}
 
 // Setup real-time preview updates on input changes
 function setupRealtimePreview() {

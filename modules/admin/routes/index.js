@@ -31,13 +31,27 @@ router.post('/toggle-status', adminAuth, LicenseController.toggleLicenseStatus);
 // Debug route
 router.get('/debug-license-types', adminAuth, LicenseController.debugLicenseTypes);
 
+/**
+ * DYNAMIC CONTENT MANAGEMENT ENDPOINTS
+ * 
+ * These endpoints manage configurable content for WordPress plugins and future platforms.
+ * Content is stored in the dynamic_content table and served to plugin installations.
+ * 
+ * Database Schema:
+ * - content_key: Unique identifier (e.g., 'preview_title_text')
+ * - content_value: The actual content text/URL
+ * - content_type: 'text' or 'url' for validation
+ * - license_type: 'all' (future: specific license targeting)
+ * - is_active: Boolean for content activation
+ * 
+ * Security: All endpoints require ADMIN_KEY for access
+ * Caching: Plugin cache clearing triggered after updates
+ */
+
 // Dynamic content management routes
 router.get('/dynamic-content', adminAuth, async (req, res) => {
   try {
     const db = require('../../../db');
-    
-    console.log('📥 GET dynamic content request, admin_key provided:', req.query.admin_key ? 'YES' : 'NO');
-    console.log('✅ Admin key validated, querying database...');
     
     const contentResult = await db.query(`
       SELECT content_key, content_value, content_type, license_type, is_active 
@@ -46,11 +60,6 @@ router.get('/dynamic-content', adminAuth, async (req, res) => {
       ORDER BY content_key
     `);
     
-    console.log('📊 Database query result:', {
-      rowCount: contentResult.rowCount,
-      rows: contentResult.rows
-    });
-    
     res.json({
       success: true,
       content: contentResult.rows,
@@ -58,7 +67,7 @@ router.get('/dynamic-content', adminAuth, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Dynamic content fetch error:', error);
+    console.error('Dynamic content fetch error:', error);
     res.json({
       success: false,
       message: 'Failed to fetch dynamic content',
