@@ -1125,11 +1125,10 @@ async function loadDynamicContent() {
         const data = await response.json();
         
         if (data.success) {
-            // Populate ALL form fields with current values from database
+            // Only populate editable fields
             const fieldIds = [
                 'preview_title_text', 'preview_description_text', 'preview_button_text', 'xagio_affiliate_url',
-                'metabox_status_text', 'metabox_views_prefix', 'metabox_boost_title', 'metabox_boost_subtitle',
-                'metabox_button_text', 'metabox_affiliate_url', 'metabox_stats_prefix',
+                'metabox_boost_title', 'metabox_boost_subtitle', 'metabox_button_text', 'metabox_affiliate_url',
                 'upgrade_message', 'support_url', 'training_url'
             ];
             
@@ -1318,19 +1317,21 @@ function updatePreview() {
 
 function updatePreviewContent() {
     try {
-        // Get all field values
+        // Get editable field values
         const previewTitle = document.getElementById('preview_title_text')?.value || '🚀 Get Premium';
         const previewDesc = document.getElementById('preview_description_text')?.value || 'Upgrade to unlock all features';
         const previewButton = document.getElementById('preview_button_text')?.value || 'Get Premium Now';
         const affiliateUrl = document.getElementById('xagio_affiliate_url')?.value || '';
         
-        const metaboxStatus = document.getElementById('metabox_status_text')?.value || '✓ SiteOverlay Pro Active';
-        const metaboxViewsPrefix = document.getElementById('metabox_views_prefix')?.value || '👁';
         const metaboxTitle = document.getElementById('metabox_boost_title')?.value || '🚀 Boost Your Rankings';
         const metaboxSubtitle = document.getElementById('metabox_boost_subtitle')?.value || 'Get the #1 tool for success';
         const metaboxButton = document.getElementById('metabox_button_text')?.value || 'Get Premium Now';
         const metaboxUrl = document.getElementById('metabox_affiliate_url')?.value || '';
-        const metaboxStatsPrefix = document.getElementById('metabox_stats_prefix')?.value || 'Views:';
+        
+        // Static values (not editable)
+        const metaboxStatus = '✓ SiteOverlay Pro Active';
+        const metaboxViewsPrefix = '👁';
+        const metaboxStatsPrefix = 'Views:';
         
         // Update Settings Page Preview
         const titleDisplay = document.getElementById('preview-title-display');
@@ -1354,8 +1355,12 @@ function updatePreviewContent() {
         const buttonMetaDisplay = document.getElementById('preview-metabox-button');
         const statsPrefixDisplay = document.getElementById('preview-metabox-stats-prefix');
         
+        // Use static values
         if (statusDisplay) statusDisplay.textContent = metaboxStatus;
         if (viewsPrefixDisplay) viewsPrefixDisplay.textContent = metaboxViewsPrefix;
+        if (statsPrefixDisplay) statsPrefixDisplay.textContent = metaboxStatsPrefix;
+        
+        // Use editable values
         if (titleMetaDisplay) titleMetaDisplay.textContent = metaboxTitle;
         if (subtitleMetaDisplay) subtitleMetaDisplay.textContent = metaboxSubtitle;
         if (buttonMetaDisplay) {
@@ -1364,7 +1369,6 @@ function updatePreviewContent() {
                 buttonMetaDisplay.onclick = () => window.open(metaboxUrl, '_blank');
             }
         }
-        if (statsPrefixDisplay) statsPrefixDisplay.textContent = metaboxStatsPrefix;
         
     } catch (error) {
         // Preview update failed silently
