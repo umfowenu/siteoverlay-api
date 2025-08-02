@@ -479,6 +479,86 @@ router.get('/admin/dynamic-content', async (req, res) => {
   }
 });
 
+// Get all purchasers (admin endpoint)
+router.get('/admin/api/purchasers', async (req, res) => {
+  try {
+    const { admin_key, sort_by = 'created_at', sort_order = 'desc' } = req.query;
+    
+    // Verify admin access
+    if (admin_key !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    console.log('🔍 Loading purchasers with sort:', { sort_by, sort_order });
+    
+    // Query all non-trial licenses
+    const result = await db.query(`
+      SELECT license_key, license_type, status, customer_name, customer_email, 
+             site_limit, created_at, renewal_date, kill_switch_enabled,
+             COALESCE(amount_paid, 0) as amount_paid,
+             payment_processor
+      FROM licenses 
+      WHERE license_type != 'trial'
+      ORDER BY ${sort_by} ${sort_order.toUpperCase()}
+    `);
+    
+    console.log('🔍 Found purchasers:', result.rows.length);
+    
+    res.json({
+      success: true,
+      purchasers: result.rows
+    });
+    
+  } catch (error) {
+    console.error('❌ Purchasers fetch error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to fetch purchasers'
+    });
+  }
+});
+
+// Get all trials (admin endpoint)  
+router.get('/admin/api/trials', async (req, res) => {
+  try {
+    const { admin_key, sort_by = 'created_at', sort_order = 'desc' } = req.query;
+    
+    // Verify admin access
+    if (admin_key !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    console.log('🔍 Loading trials with sort:', { sort_by, sort_order });
+    
+    // Query all trial licenses
+    const result = await db.query(`
+      SELECT license_key, status, customer_name, customer_email,
+             created_at, trial_end_date, kill_switch_enabled,
+             CASE 
+               WHEN trial_end_date > NOW() THEN 'active'
+               ELSE 'expired'
+             END as trial_status
+      FROM licenses 
+      WHERE license_type = 'trial'
+      ORDER BY ${sort_by} ${sort_order.toUpperCase()}
+    `);
+    
+    console.log('🔍 Found trials:', result.rows.length);
+    
+    res.json({
+      success: true,
+      trials: result.rows
+    });
+    
+  } catch (error) {
+    console.error('❌ Trials fetch error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to fetch trials'
+    });
+  }
+});
+
 // ============================================================================
 // LICENSE VALIDATION AND MANAGEMENT
 // ============================================================================
