@@ -1034,4 +1034,38 @@ async function initializeDatabase() {
 // Initialize database on startup
 initializeDatabase();
 
+/**
+ * PUBLIC DYNAMIC CONTENT ENDPOINT
+ * 
+ * This endpoint provides public access to dynamic content for plugin installations.
+ * No authentication required - serves active content to all plugin instances.
+ * 
+ * Used by: WordPress plugins, web apps, Chrome extensions
+ * Security: Only returns active content, no sensitive admin data
+ */
+
+// Public dynamic content endpoint for plugin access
+router.get('/api/dynamic-content-public', async (req, res) => {
+  try {
+    const contentResult = await db.query(`
+      SELECT content_key, content_value, content_type 
+      FROM dynamic_content 
+      WHERE is_active = true
+      ORDER BY content_key
+    `);
+    
+    res.json({
+      success: true,
+      content: contentResult.rows
+    });
+    
+  } catch (error) {
+    console.error('Public dynamic content fetch error:', error);
+    res.json({
+      success: false,
+      message: 'Failed to fetch content'
+    });
+  }
+});
+
 module.exports = router;
