@@ -1078,15 +1078,22 @@ body {
     }
 }
 
-/* Dynamic Content Management Section - Fixed Layout */
+/* Dynamic Content Management Section - Match Exact Width */
 .dynamic-content-management {
     background: #f8f9fa;
     border-radius: 8px;
     padding: 20px;
     margin: 20px auto;
-    max-width: 1360px; /* Match admin container width */
-    width: calc(100% - 40px); /* Account for margins */
+    width: calc(100% - 40px); /* Same as other sections */
+    max-width: calc(1400px - 40px); /* Match admin container */
     box-sizing: border-box;
+}
+
+/* Ensure it's inside main content area */
+main .dynamic-content-management {
+    margin: 20px 0; /* Remove auto centering inside main */
+    width: 100%; /* Full width of main container */
+    max-width: none; /* Remove max-width constraint */
 }
 
 .dynamic-content-management .section-header {

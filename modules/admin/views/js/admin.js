@@ -13,16 +13,20 @@ class AdminDashboard {
 
     init() {
         this.bindEvents();
-        this.loadDashboard();
         this.checkSystemHealth();
         loadDynamicContent();
         initializePreview();
         
-        // Auto-load data on startup (simple, clean version)
-        setTimeout(() => {
-            this.loadPurchasers();
-            this.loadTrials();
-        }, 1000);
+        // Load dashboard data first, then auto-load tables
+        this.loadDashboard().then(() => {
+            // Auto-load data after dashboard is ready
+            setTimeout(() => {
+                if (this.adminKey) {
+                    this.loadPurchasers();
+                    this.loadTrials();
+                }
+            }, 500);
+        });
     }
 
     getAdminKey() {
@@ -46,7 +50,11 @@ class AdminDashboard {
     bindEvents() {
         // Refresh button
         document.getElementById('refreshBtn').addEventListener('click', () => {
+            // Reload dashboard and data
             this.loadDashboard();
+            this.loadPurchasers();
+            this.loadTrials();
+            loadDynamicContent();
         });
 
         // Search functionality
@@ -113,12 +121,15 @@ class AdminDashboard {
                 this.updateStats(data.stats);
                 this.updateRecentLicenses(data.recent_licenses);
                 // Dashboard data loaded successfully
+                return Promise.resolve();
             } else {
                 this.showError('Failed to load dashboard data');
+                return Promise.reject(new Error('Dashboard load failed'));
             }
         } catch (error) {
             console.error('Dashboard load error:', error);
             this.showError('Failed to load dashboard data');
+            return Promise.reject(error);
         } finally {
             this.hideLoading();
         }
@@ -1298,26 +1309,43 @@ function showContentMessage(message, type) {
 
 // Plugin Preview Functions
 function initializePreview() {
-    const toggleBtn = document.getElementById('togglePreview');
-    const previewDiv = document.getElementById('pluginPreview');
+    console.log('Initializing preview...');
     
-    if (toggleBtn && previewDiv) {
-        toggleBtn.addEventListener('click', function() {
-            const isVisible = previewDiv.style.display !== 'none';
-            
-            if (isVisible) {
-                previewDiv.style.display = 'none';
-                toggleBtn.innerHTML = '<i class="fas fa-eye"></i> Show Plugin Preview';
-            } else {
-                previewDiv.style.display = 'block';
-                toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Plugin Preview';
-                updatePreview();
-            }
-        });
+    // Wait for DOM elements to be ready
+    setTimeout(() => {
+        const toggleBtn = document.getElementById('togglePreview');
+        const previewSection = document.getElementById('pluginPreview');
         
-        // Add real-time preview updates to content inputs
-        setupPreviewUpdates();
-    }
+        console.log('Toggle button:', toggleBtn);
+        console.log('Preview section:', previewSection);
+        
+        if (toggleBtn && previewSection) {
+            // Remove any existing listeners
+            toggleBtn.replaceWith(toggleBtn.cloneNode(true));
+            const newToggleBtn = document.getElementById('togglePreview');
+            
+            newToggleBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('Preview toggle clicked');
+                
+                if (previewSection.style.display === 'none' || previewSection.style.display === '') {
+                    previewSection.style.display = 'block';
+                    newToggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Plugin Preview';
+                    updatePreviewContent();
+                } else {
+                    previewSection.style.display = 'none';
+                    newToggleBtn.innerHTML = '<i class="fas fa-eye"></i> Show Plugin Preview';
+                }
+            });
+            
+            console.log('✅ Preview toggle initialized successfully');
+        } else {
+            console.error('❌ Preview elements not found:', {
+                toggleBtn: !!toggleBtn,
+                previewSection: !!previewSection
+            });
+        }
+    }, 1000);
 }
 
 function setupPreviewUpdates() {
@@ -1342,20 +1370,48 @@ function updatePreview() {
     updatePreviewText();
 }
 
-function updatePreviewText() {
-    // Update settings page preview
-    const upgradeMessage = document.getElementById('upgrade_message')?.value || '🚀 Get Xagio';
-    const previewTitle = document.getElementById('preview-upgrade-title');
-    if (previewTitle) {
-        previewTitle.textContent = upgradeMessage;
-    }
+function updatePreviewContent() {
+    // Add basic preview content update
+    console.log('Updating preview content...');
     
-    // Update meta box preview
-    const affiliateMessage = document.getElementById('upgrade_message')?.value || '🚀 Boost Your SEO Rankings';
-    const previewAffiliate = document.getElementById('preview-affiliate-message');
-    if (previewAffiliate) {
-        previewAffiliate.textContent = affiliateMessage;
+    try {
+        const affiliateUrl = document.getElementById('xagio_affiliate_url')?.value || '';
+        const companyName = extractCompanyName(affiliateUrl) || 'Premium';
+        
+        // Update preview elements if they exist
+        const elements = {
+            'preview-affiliate-name': `Get ${companyName}`,
+            'preview-affiliate-button': `Get ${companyName} Now`,
+            'preview-meta-button': `Get ${companyName} Now`
+        };
+        
+        Object.entries(elements).forEach(([id, text]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = text;
+            }
+        });
+        
+        console.log('✅ Preview content updated');
+    } catch (error) {
+        console.error('❌ Preview update error:', error);
     }
+}
+
+function extractCompanyName(url) {
+    if (!url) return null;
+    try {
+        const domain = new URL(url).hostname.replace('www.', '');
+        const name = domain.split('.')[0];
+        return name.charAt(0).toUpperCase() + name.slice(1);
+    } catch {
+        return null;
+    }
+}
+
+function updatePreviewText() {
+    // Keep old function for compatibility
+    updatePreviewContent();
 }
 
 // Enhanced update function with preview refresh
