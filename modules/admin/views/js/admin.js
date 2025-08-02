@@ -1199,53 +1199,7 @@ async function updateContent(contentKey) {
     }
 }
 
-async function addNewContent() {
-    try {
-        const contentKey = document.getElementById('newContentKey').value.trim();
-        const contentValue = document.getElementById('newContentValue').value.trim();
-        const contentType = document.getElementById('newContentType').value;
-        const licenseType = document.getElementById('newContentLicenseType').value;
-        
-        if (!contentKey || !contentValue) {
-            showContentMessage('Please enter both content key and value', 'error');
-            return;
-        }
-        
-
-        
-        const response = await fetch('/admin/dynamic-content', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                admin_key: adminDashboard.adminKey,
-                content_key: contentKey,
-                content_value: contentValue,
-                content_type: contentType,
-                license_type: licenseType
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showContentMessage(`New content "${contentKey}" added successfully!`, 'success');
-            
-            // Clear the form
-            document.getElementById('newContentKey').value = '';
-            document.getElementById('newContentValue').value = '';
-            document.getElementById('newContentType').value = 'text';
-            document.getElementById('newContentLicenseType').value = 'all';
-            
-            // Reload dynamic content
-            setTimeout(loadDynamicContent, 1000);
-        } else {
-            showContentMessage(`Failed to add content: ${data.message}`, 'error');
-        }
-    } catch (error) {
-        console.error('❌ Error adding content:', error);
-        showContentMessage('Error adding new content', 'error');
-    }
-}
+// DELETED - addNewContent function removed as requested
 
 function showContentMessage(message, type) {
     // Remove existing messages
@@ -1385,8 +1339,60 @@ function updatePreviewText() {
 
 // Enhanced update function with preview refresh
 async function updateContentWithPreview(contentKey) {
-    await updateContent(contentKey);
-    updatePreviewText();
+    try {
+        const element = document.getElementById(contentKey);
+        if (!element) {
+            showContentMessage('Content field not found', 'error');
+            return;
+        }
+        
+        const contentValue = element.value;
+        if (!contentValue.trim()) {
+            showContentMessage('Content value cannot be empty', 'error');
+            return;
+        }
+        
+        // Determine content type
+        const contentType = element.type === 'url' ? 'url' : 'text';
+        
+        // Send to database
+        const response = await fetch('/admin/dynamic-content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_key: adminDashboard.adminKey,
+                content_key: contentKey,
+                content_value: contentValue,
+                content_type: contentType,
+                license_type: 'all'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showContentMessage(`${contentKey.replace('_', ' ')} updated successfully!`, 'success');
+            
+            // Update preview immediately
+            updatePreviewContent();
+            
+            // Clear plugin cache to show changes
+            try {
+                await fetch('/api/plugin-cache-clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_key: adminDashboard.adminKey })
+                });
+            } catch (e) {
+                // Cache clear failed, but content update succeeded
+            }
+        } else {
+            showContentMessage(`Failed to update: ${data.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('Update error:', error);
+        showContentMessage('Update failed - check connection', 'error');
+    }
 }
 
 // Software Type Management

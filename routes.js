@@ -479,6 +479,29 @@ router.get('/admin/dynamic-content', async (req, res) => {
   }
 });
 
+// Test database connection endpoint
+router.get('/admin/test-database', async (req, res) => {
+  try {
+    const { admin_key } = req.query;
+    
+    if (admin_key !== process.env.ADMIN_API_KEY) {
+      return res.status(401).json({ success: false, message: 'Invalid admin key' });
+    }
+    
+    // Test database connection
+    const result = await db.query('SELECT COUNT(*) as total FROM dynamic_content');
+    
+    res.json({
+      success: true,
+      message: 'Database connection working',
+      total_records: result.rows[0].total
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    res.status(500).json({ success: false, message: 'Database connection failed', error: error.message });
+  }
+});
+
 // Get all purchasers (admin endpoint)
 router.get('/admin/api/purchasers', async (req, res) => {
   try {
