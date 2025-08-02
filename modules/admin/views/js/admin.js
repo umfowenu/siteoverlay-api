@@ -17,6 +17,16 @@ class AdminDashboard {
         this.checkSystemHealth();
         loadDynamicContent();
         initializePreview();
+        
+        // Debug: Force show dynamic content section
+        const dynamicSection = document.querySelector('.dynamic-content-management');
+        if (dynamicSection) {
+            dynamicSection.style.display = 'block';
+            dynamicSection.style.visibility = 'visible';
+            console.log('✅ Dynamic content section made visible');
+        } else {
+            console.error('❌ Dynamic content section not found in DOM');
+        }
     }
 
     getAdminKey() {
