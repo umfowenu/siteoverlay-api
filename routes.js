@@ -413,7 +413,7 @@ router.post('/admin/dynamic-content', async (req, res) => {
     const { admin_key, content_key, content_value, content_type = 'text', license_type = 'all' } = req.body;
     
     // Verify admin access
-    if (admin_key !== process.env.ADMIN_API_KEY) {
+    if (admin_key !== process.env.ADMIN_KEY) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     
@@ -427,7 +427,7 @@ router.post('/admin/dynamic-content', async (req, res) => {
     const result = await db.query(`
       INSERT INTO dynamic_content (content_key, content_value, content_type, license_type, is_active, created_at, updated_at)
       VALUES ($1, $2, $3, $4, true, NOW(), NOW())
-      ON CONFLICT (content_key, license_type) 
+      ON CONFLICT (content_key) 
       DO UPDATE SET 
         content_value = $2,
         content_type = $3,
@@ -456,7 +456,7 @@ router.get('/admin/dynamic-content', async (req, res) => {
     const { admin_key } = req.query;
     
     // Verify admin access
-    if (admin_key !== process.env.ADMIN_API_KEY) {
+    if (admin_key !== process.env.ADMIN_KEY) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     
@@ -484,7 +484,7 @@ router.get('/admin/test-database', async (req, res) => {
   try {
     const { admin_key } = req.query;
     
-    if (admin_key !== process.env.ADMIN_API_KEY) {
+    if (admin_key !== process.env.ADMIN_KEY) {
       return res.status(401).json({ success: false, message: 'Invalid admin key' });
     }
     
@@ -508,7 +508,7 @@ router.get('/admin/api/purchasers', async (req, res) => {
     const { admin_key, sort_by = 'created_at', sort_order = 'desc' } = req.query;
     
     // Verify admin access
-    if (admin_key !== process.env.ADMIN_API_KEY) {
+    if (admin_key !== process.env.ADMIN_KEY) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     
@@ -547,7 +547,7 @@ router.get('/admin/api/trials', async (req, res) => {
     const { admin_key, sort_by = 'created_at', sort_order = 'desc' } = req.query;
     
     // Verify admin access
-    if (admin_key !== process.env.ADMIN_API_KEY) {
+    if (admin_key !== process.env.ADMIN_KEY) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     

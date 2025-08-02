@@ -16,6 +16,7 @@ class AdminDashboard {
         this.checkSystemHealth();
         loadDynamicContent();
         initializePreview();
+        setupRealtimePreview(); // Add this line
         
         // Load dashboard data first, then auto-load tables
         this.loadDashboard().then(() => {
@@ -1340,13 +1341,18 @@ function updatePreviewText() {
 // Enhanced update function with preview refresh
 async function updateContentWithPreview(contentKey) {
     try {
+        console.log('🔄 Updating content:', contentKey);
+        
         const element = document.getElementById(contentKey);
         if (!element) {
+            console.error('❌ Element not found:', contentKey);
             showContentMessage('Content field not found', 'error');
             return;
         }
         
         const contentValue = element.value;
+        console.log('📝 Content value:', contentValue);
+        
         if (!contentValue.trim()) {
             showContentMessage('Content value cannot be empty', 'error');
             return;
@@ -1354,6 +1360,13 @@ async function updateContentWithPreview(contentKey) {
         
         // Determine content type
         const contentType = element.type === 'url' ? 'url' : 'text';
+        
+        console.log('🚀 Sending to API:', {
+            admin_key: adminDashboard.adminKey ? 'SET' : 'MISSING',
+            content_key: contentKey,
+            content_value: contentValue,
+            content_type: contentType
+        });
         
         // Send to database
         const response = await fetch('/admin/dynamic-content', {
@@ -1368,7 +1381,9 @@ async function updateContentWithPreview(contentKey) {
             })
         });
         
+        console.log('📡 API Response status:', response.status);
         const data = await response.json();
+        console.log('📋 API Response data:', data);
         
         if (data.success) {
             showContentMessage(`${contentKey.replace('_', ' ')} updated successfully!`, 'success');
@@ -1384,15 +1399,35 @@ async function updateContentWithPreview(contentKey) {
                     body: JSON.stringify({ admin_key: adminDashboard.adminKey })
                 });
             } catch (e) {
-                // Cache clear failed, but content update succeeded
+                console.log('⚠️ Cache clear failed (non-critical):', e);
             }
         } else {
+            console.error('❌ Update failed:', data);
             showContentMessage(`Failed to update: ${data.message}`, 'error');
         }
     } catch (error) {
-        console.error('Update error:', error);
-        showContentMessage('Update failed - check connection', 'error');
+        console.error('💥 Critical error:', error);
+        showContentMessage('Update failed - check browser console for details', 'error');
     }
+}
+
+// Setup real-time preview updates on input changes
+function setupRealtimePreview() {
+    // List of all editable fields
+    const editableFields = [
+        'preview_title_text', 'preview_description_text', 'preview_button_text', 'xagio_affiliate_url',
+        'metabox_boost_title', 'metabox_boost_subtitle', 'metabox_button_text', 'metabox_affiliate_url'
+    ];
+    
+    // Add input event listeners for real-time preview updates
+    editableFields.forEach(fieldId => {
+        const element = document.getElementById(fieldId);
+        if (element) {
+            element.addEventListener('input', () => {
+                updatePreviewContent();
+            });
+        }
+    });
 }
 
 // Software Type Management
