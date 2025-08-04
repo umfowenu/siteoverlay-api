@@ -383,8 +383,7 @@ router.get('/dynamic-content', async (req, res) => {
     
     // Query dynamic content based on license type and plugin version
     const contentResult = await db.query(`
-      SELECT content_key, content_value, content_type, 
-             plugin_download_url, installation_video_url, installation_guide_pdf_url
+      SELECT content_key, content_value, content_type
       FROM dynamic_content 
       WHERE is_active = true 
         AND (license_type = $1 OR license_type = 'all')
@@ -402,24 +401,34 @@ router.get('/dynamic-content', async (req, res) => {
       };
     });
     
-    // Add the new download and documentation fields if they exist in the database
-    if (contentResult.rows.length > 0) {
-      const firstRow = contentResult.rows[0];
-      if (firstRow.plugin_download_url) {
+    // Get the download/documentation URLs from the specific row (ID=1)
+    const urlResult = await db.query(`
+      SELECT plugin_download_url, installation_video_url, installation_guide_pdf_url
+      FROM dynamic_content 
+      WHERE id = 1
+    `);
+
+    // Add the URL fields if they exist
+    if (urlResult.rows.length > 0) {
+      const urlRow = urlResult.rows[0];
+      
+      if (urlRow.plugin_download_url) {
         content.plugin_download_url = {
-          value: firstRow.plugin_download_url,
+          value: urlRow.plugin_download_url,
           type: 'url'
         };
       }
-      if (firstRow.installation_video_url) {
+      
+      if (urlRow.installation_video_url) {
         content.installation_video_url = {
-          value: firstRow.installation_video_url,
+          value: urlRow.installation_video_url,
           type: 'url'
         };
       }
-      if (firstRow.installation_guide_pdf_url) {
+      
+      if (urlRow.installation_guide_pdf_url) {
         content.installation_guide_pdf_url = {
-          value: firstRow.installation_guide_pdf_url,
+          value: urlRow.installation_guide_pdf_url,
           type: 'url'
         };
       }
