@@ -56,15 +56,16 @@ async function sendLicenseEmail(customerEmail, customerName, licenseKey, license
 
                 <h3>ðŸš€ Next Steps:</h3>
                 <ol>
-                    <li>Download the SiteOverlay Pro plugin from your account area</li>
+                    <li><strong>Download the plugin:</strong> <a href="https://siteoverlay-pro.s3.us-east-1.amazonaws.com/plugins/siteoverlay-pro.zip" style="color: #007cba;">Click here to download SiteOverlay Pro</a></li>
                     <li>Install the plugin on your WordPress site</li>
-                    <li>Go to Settings â†’ SiteOverlay License in your WordPress admin</li>
+                    <li>Go to Settings â†' SiteOverlay License in your WordPress admin</li>
                     <li>Enter your license key above to activate</li>
                 </ol>
 
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="https://siteoverlaypro.com/my-account" class="button">Access Your Account</a>
-                    <a href="https://siteoverlaypro.com/documentation" class="button" style="background: #6c757d;">View Documentation</a>
+                    <a href="https://siteoverlay-pro.s3.us-east-1.amazonaws.com/plugins/siteoverlay-pro.zip" class="button">ðŸ"¥ Download Plugin</a>
+                    <a href="https://siteoverlay-pro.s3.us-east-1.amazonaws.com/videos/Installation+Walkthrough.mp4" class="button" style="background: #28a745;">ðŸŽ¥ Watch Installation Video</a>
+                    <a href="https://siteoverlay-pro.s3.us-east-1.amazonaws.com/documentation/installation-guide.pdf" class="button" style="background: #6c757d;">ðŸ"„ Installation Guide</a>
                 </div>
 
                 <h3>ðŸ’¡ Need Help?</h3>

@@ -401,6 +401,20 @@ router.get('/dynamic-content', async (req, res) => {
       };
     });
     
+    // Add new required fields for plugin download and documentation
+    content.plugin_download_url = {
+      value: "https://siteoverlay-pro.s3.us-east-1.amazonaws.com/plugins/siteoverlay-pro.zip",
+      type: "url"
+    };
+    content.installation_video_url = {
+      value: "https://siteoverlay-pro.s3.us-east-1.amazonaws.com/videos/Installation+Walkthrough.mp4",
+      type: "url"
+    };
+    content.installation_guide_pdf_url = {
+      value: "https://siteoverlay-pro.s3.us-east-1.amazonaws.com/documentation/installation-guide.pdf",
+      type: "url"
+    };
+    
     res.json({
       success: true,
       content: content,
