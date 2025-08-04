@@ -671,7 +671,16 @@ router.post('/validate-license', async (req, res) => {
   try {
     const { licenseKey, siteUrl, siteData } = req.body;
 
+    // Add comprehensive logging for debugging
+    console.log('🔍 License validation request:', {
+      licenseKey: licenseKey ? `${licenseKey.substring(0, 8)}...` : 'null',
+      siteUrl: siteUrl || 'not provided',
+      hasSiteData: !!siteData,
+      timestamp: new Date().toISOString()
+    });
+
     if (!licenseKey) {
+      console.log('❌ License validation failed: No license key provided');
       return res.json({
         success: false,
         message: 'License key is required'
@@ -693,6 +702,18 @@ router.post('/validate-license', async (req, res) => {
         WHERE su.site_license_key = $1 AND su.status = 'active'
       `, [licenseKey]);
       
+      console.log('🔍 Site-specific license query result:', {
+        licenseKey: `${licenseKey.substring(0, 8)}...`,
+        rowsFound: licenseResult.rows.length,
+        query: 'site_usage JOIN licenses',
+        firstRow: licenseResult.rows[0] ? {
+          license_key: licenseResult.rows[0].license_key ? `${licenseResult.rows[0].license_key.substring(0, 8)}...` : 'null',
+          license_type: licenseResult.rows[0].license_type,
+          status: licenseResult.rows[0].status,
+          site_license_key: licenseResult.rows[0].site_license_key ? `${licenseResult.rows[0].site_license_key.substring(0, 8)}...` : 'null'
+        } : null
+      });
+      
     } else if (licenseKey.startsWith('TRIAL-')) {
       console.log('🔍 Validating trial license key');
       
@@ -701,6 +722,18 @@ router.post('/validate-license', async (req, res) => {
         'SELECT * FROM licenses WHERE license_key = $1',
         [licenseKey]
       );
+      
+      console.log('🔍 Trial license query result:', {
+        licenseKey: `${licenseKey.substring(0, 8)}...`,
+        rowsFound: licenseResult.rows.length,
+        query: 'licenses table only',
+        firstRow: licenseResult.rows[0] ? {
+          license_key: licenseResult.rows[0].license_key ? `${licenseResult.rows[0].license_key.substring(0, 8)}...` : 'null',
+          license_type: licenseResult.rows[0].license_type,
+          status: licenseResult.rows[0].status,
+          trial_end_date: licenseResult.rows[0].trial_end_date
+        } : null
+      });
       
     } else {
       console.log('🔍 Master license key - NOT VALID for plugin usage');
@@ -713,12 +746,18 @@ router.post('/validate-license', async (req, res) => {
     }
 
     console.log('🔍 License validation result:', {
-      licenseKey,
+      licenseKey: `${licenseKey.substring(0, 8)}...`,
       found: licenseResult.rows.length > 0,
-      table: licenseKey.startsWith('SITE-') ? 'site_usage' : 'licenses'
+      table: licenseKey.startsWith('SITE-') ? 'site_usage' : 'licenses',
+      rowCount: licenseResult.rows.length
     });
 
     if (licenseResult.rows.length === 0) {
+      console.log('❌ License validation failed: No license found in database', {
+        licenseKey: `${licenseKey.substring(0, 8)}...`,
+        licenseType: licenseKey.startsWith('SITE-') ? 'site-specific' : licenseKey.startsWith('TRIAL-') ? 'trial' : 'master',
+        searchedTable: licenseKey.startsWith('SITE-') ? 'site_usage JOIN licenses' : 'licenses'
+      });
       return res.json({
         success: false,
         message: 'Invalid license key'
@@ -871,6 +910,16 @@ router.post('/validate-license', async (req, res) => {
     }
 
     // Return success response
+    console.log('✅ License validation successful:', {
+      licenseKey: `${licenseKey.substring(0, 8)}...`,
+      licenseType: license.license_type,
+      status: license.status,
+      customerName: license.customer_name,
+      siteLimit: siteLimit,
+      sitesUsed: currentUsage,
+      sitesRemaining: siteLimit > 0 ? Math.max(0, siteLimit - currentUsage) : 'Unlimited'
+    });
+
     res.json({
       success: true,
       message: 'License validated successfully',
