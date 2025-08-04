@@ -383,7 +383,8 @@ router.get('/dynamic-content', async (req, res) => {
     
     // Query dynamic content based on license type and plugin version
     const contentResult = await db.query(`
-      SELECT content_key, content_value, content_type
+      SELECT content_key, content_value, content_type, 
+             plugin_download_url, installation_video_url, installation_guide_pdf_url
       FROM dynamic_content 
       WHERE is_active = true 
         AND (license_type = $1 OR license_type = 'all')
@@ -400,6 +401,29 @@ router.get('/dynamic-content', async (req, res) => {
         type: row.content_type
       };
     });
+    
+    // Add the new download and documentation fields if they exist in the database
+    if (contentResult.rows.length > 0) {
+      const firstRow = contentResult.rows[0];
+      if (firstRow.plugin_download_url) {
+        content.plugin_download_url = {
+          value: firstRow.plugin_download_url,
+          type: 'url'
+        };
+      }
+      if (firstRow.installation_video_url) {
+        content.installation_video_url = {
+          value: firstRow.installation_video_url,
+          type: 'url'
+        };
+      }
+      if (firstRow.installation_guide_pdf_url) {
+        content.installation_guide_pdf_url = {
+          value: firstRow.installation_guide_pdf_url,
+          type: 'url'
+        };
+      }
+    }
     
 
     
