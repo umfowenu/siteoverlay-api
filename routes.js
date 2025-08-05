@@ -1168,4 +1168,59 @@ router.get('/dynamic-content-public', async (req, res) => {
   }
 });
 
+// PABBLY MAPPING TEST - Send exact data structure for field mapping
+router.post('/test-pabbly-mapping', async (req, res) => {
+  try {
+    const testData = {
+      email: 'marius@shaw.ca',
+      customer_name: 'Marius Nothing', // Using the exact name from your list
+      support_email: 'support@ebiz360.ca',
+      sales_page: 'https://siteoverlay.24hr.pro',
+      next_renewal: '2025-12-31',
+      license_type: 'professional_5site',
+      plugin_download: 'https://siteoverlay-pro.s3.us-east-1.amazonaws.com/plugins/siteoverlay-pro.zip',
+      aweber_tags: 'subscription-active'
+    };
+
+    console.log('📤 Sending test data to Pabbly:', testData);
+    
+    // Send directly to Pabbly webhook URL
+    const pabblyUrl = process.env.PABBLY_WEBHOOK_URL_PURCHASE;
+    
+    if (pabblyUrl) {
+      const response = await fetch(pabblyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testData)
+      });
+
+      const responseText = await response.text();
+      console.log('📥 Pabbly response:', response.status, responseText);
+
+      res.json({ 
+        success: response.ok,
+        message: `Test data sent to Pabbly. Status: ${response.status}`,
+        pabblyResponse: responseText,
+        dataSent: testData,
+        webhookUrl: pabblyUrl
+      });
+    } else {
+      res.json({ 
+        success: false, 
+        error: 'PABBLY_WEBHOOK_URL_PURCHASE not configured',
+        dataSent: testData
+      });
+    }
+  } catch (error) {
+    console.error('❌ Pabbly test error:', error);
+    res.json({ 
+      success: false, 
+      error: error.message,
+      dataSent: testData
+    });
+  }
+});
+
 module.exports = router;
