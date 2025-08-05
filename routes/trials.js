@@ -376,24 +376,50 @@ router.post('/request-paid-license', async (req, res) => {
         message: `Site limit reached (${siteLimit} sites). Please upgrade your subscription.`
       });
     }
-    // 3. Generate new site-specific license
-    const siteLicenseKey = 'SITE-' + generateLicenseKey();
-    // 4. Register the site
-    await db.query(`
-      INSERT INTO site_usage (
-        license_key, site_signature, site_domain, site_url, 
-        site_license_key, customer_email, customer_name, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `, [
-      mainLicense.license_key,
-      generateSiteSignature({ site_domain: new URL(domain).hostname }),
-      new URL(domain).hostname,
-      domain,
-      siteLicenseKey,
-      email,
-      name,
-      'active'
-    ]);
+    // 3. Generate site signature
+    const siteSignature = generateSiteSignature({ site_domain: new URL(domain).hostname });
+    
+    // 4. Check if site is already registered
+    const existingSite = await db.query(`
+      SELECT * FROM site_usage 
+      WHERE license_key = $1 AND site_signature = $2
+    `, [mainLicense.license_key, siteSignature]);
+    
+    let siteLicenseKey;
+    
+    if (existingSite.rows.length > 0) {
+      // Site already registered - use existing site license key
+      siteLicenseKey = existingSite.rows[0].site_license_key;
+      console.log('🔄 Site already registered, reusing existing license:', siteLicenseKey);
+      
+      // Update the existing record with current info
+      await db.query(`
+        UPDATE site_usage 
+        SET customer_email = $1, customer_name = $2, status = 'active', updated_at = NOW()
+        WHERE license_key = $3 AND site_signature = $4
+      `, [email, name, mainLicense.license_key, siteSignature]);
+      
+    } else {
+      // New site registration
+      siteLicenseKey = 'SITE-' + generateLicenseKey();
+      console.log('✅ Registering new site with license:', siteLicenseKey);
+      
+      await db.query(`
+        INSERT INTO site_usage (
+          license_key, site_signature, site_domain, site_url, 
+          site_license_key, customer_email, customer_name, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [
+        mainLicense.license_key,
+        siteSignature,
+        new URL(domain).hostname,
+        domain,
+        siteLicenseKey,
+        email,
+        name,
+        'active'
+      ]);
+    }
     // 5. Send to Pabbly (Connection 2) - Email delivery with license
     await sendLicenseUpdateToPabbly(email, siteLicenseKey, {
       customer_name: name,
