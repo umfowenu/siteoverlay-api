@@ -395,7 +395,7 @@ router.post('/request-paid-license', async (req, res) => {
       // Update the existing record with current info
       await db.query(`
         UPDATE site_usage 
-        SET customer_email = $1, customer_name = $2, status = 'active', updated_at = NOW()
+        SET customer_email = $1, customer_name = $2, status = 'active'
         WHERE license_key = $3 AND site_signature = $4
       `, [email, name, mainLicense.license_key, siteSignature]);
       
@@ -435,9 +435,29 @@ router.post('/request-paid-license', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Paid license request error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      stack: error.stack
+    });
+    
+    // Provide more specific error messages based on error type
+    let errorMessage = 'Failed to process license request';
+    
+    if (error.code === '23505') {
+      errorMessage = 'This site is already registered. Please contact support if you need assistance.';
+    } else if (error.message.includes('invalid input syntax')) {
+      errorMessage = 'Invalid data provided. Please check your email and domain format.';
+    } else if (error.message.includes('connect') || error.message.includes('timeout')) {
+      errorMessage = 'Database connection issue. Please try again in a moment.';
+    }
+    
     res.json({
       success: false,
-      message: 'Failed to process license request'
+      message: errorMessage,
+      error_code: error.code || 'UNKNOWN',
+      debug_info: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
