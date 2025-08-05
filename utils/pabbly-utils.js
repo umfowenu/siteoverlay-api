@@ -421,6 +421,7 @@ async function sendPurchaseToPabbly(email, licenseType, metadata = {}) {
       sales_page: process.env.SALES_PAGE_URL || 'https://siteoverlay.24hr.pro',
       next_renewal: metadata.next_renewal || 'Unknown',
       license_type: licenseType,
+      plugin_download: 'https://siteoverlay-pro.s3.us-east-1.amazonaws.com/plugins/siteoverlay-pro.zip',
       aweber_tags: "subscription-active"
     };
 
