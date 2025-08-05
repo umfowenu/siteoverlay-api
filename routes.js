@@ -766,7 +766,7 @@ router.post('/validate-license', async (req, res) => {
 
     const license = licenseResult.rows[0];
 
-    // CHECK FOR TRIAL REUSE PREVENTION (only for paid licenses on sites that had trials)
+    // IMPROVED: Allow license upgrades but prevent trial reuse
     if (siteUrl && !licenseKey.startsWith('TRIAL-')) {
       const siteSignature = generateSiteSignature({
         site_domain: new URL(siteUrl).hostname,
@@ -783,23 +783,37 @@ router.post('/validate-license', async (req, res) => {
       if (existingTrialCheck.rows.length > 0) {
         const existingTrial = existingTrialCheck.rows[0];
         
-        // If trial is still active
-        if (existingTrial.status === 'active' && existingTrial.trial_end_date) {
-          const now = new Date();
-          const trialEnd = new Date(existingTrial.trial_end_date);
-          if (now <= trialEnd) {
-            return res.json({
-              success: false,
-              message: 'A trial is currently active on this site. Trials can only be used once per site.'
-            });
+        // BUSINESS LOGIC FIX: Only block if trying to activate ANOTHER trial
+        // Allow paid license upgrades from trial (active or expired)
+        if (licenseKey.startsWith('TRIAL-')) {
+          // This is a trial request on a site that already had a trial
+          if (existingTrial.status === 'active' && existingTrial.trial_end_date) {
+            const now = new Date();
+            const trialEnd = new Date(existingTrial.trial_end_date);
+            if (now <= trialEnd) {
+              return res.json({
+                success: false,
+                message: 'A trial is currently active on this site. Trials can only be used once per site.'
+              });
+            }
           }
+          
+          // Trial was used before (even if expired) - block new trial
+          return res.json({
+            success: false,
+            message: 'Trial has already been used on this site. Trials can only be used once per site. Please purchase a license to continue using SiteOverlay Pro.'
+          });
         }
         
-        // If trial was used before (even if expired)
-        return res.json({
-          success: false,
-          message: 'Trial has already been used on this site. Trials can only be used once per site. Please purchase a license to continue using SiteOverlay Pro.'
-        });
+        // ALLOW PAID LICENSE UPGRADES: If this is a paid license, allow it to override trial
+        console.log(`✅ Allowing paid license upgrade from trial on site: ${siteSignature}`);
+        
+        // Optionally deactivate the existing trial when paid license is activated
+        await db.query(
+          'UPDATE licenses SET status = $1 WHERE license_key = $2',
+          ['superseded', existingTrial.license_key]
+        );
+        console.log(`🔄 Trial license ${existingTrial.license_key} marked as superseded by paid license ${licenseKey}`);
       }
     }
 
