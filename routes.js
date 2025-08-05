@@ -1237,4 +1237,64 @@ router.post('/test-pabbly-mapping', async (req, res) => {
   }
 });
 
+// Check for existing license before activation (for warning system)
+router.post('/check-existing-license', async (req, res) => {
+  try {
+    const { siteUrl } = req.body;
+    
+    if (!siteUrl) {
+      return res.json({
+        success: true,
+        existing_license: null
+      });
+    }
+
+    const siteSignature = generateSiteSignature({
+      site_domain: new URL(siteUrl).hostname,
+      site_path: new URL(siteUrl).pathname,
+      abspath: siteUrl
+    });
+
+    // Check for any active license on this site
+    const existingLicenseCheck = await db.query(`
+      SELECT l.license_key, l.license_type, l.status, l.trial_end_date, l.renewal_date
+      FROM licenses l 
+      JOIN site_usage su ON l.license_key = su.license_key 
+      WHERE su.site_signature = $1 AND l.status = 'active'
+      ORDER BY l.created_at DESC
+      LIMIT 1
+    `, [siteSignature]);
+
+    if (existingLicenseCheck.rows.length > 0) {
+      const existing = existingLicenseCheck.rows[0];
+      
+      // Format the response with user-friendly information
+      const licenseInfo = {
+        type: existing.license_type === 'trial' ? 'Trial' : 'Paid',
+        license_type: existing.license_type,
+        status: existing.status,
+        expires: existing.trial_end_date || existing.renewal_date || null,
+        license_key: existing.license_key.substring(0, 8) + '...' // Partial key for display
+      };
+
+      return res.json({
+        success: true,
+        existing_license: licenseInfo
+      });
+    }
+
+    return res.json({
+      success: true,
+      existing_license: null
+    });
+
+  } catch (error) {
+    console.error('❌ Check existing license error:', error);
+    return res.json({
+      success: false,
+      error: 'Failed to check existing license'
+    });
+  }
+});
+
 module.exports = router;
