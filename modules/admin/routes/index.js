@@ -32,13 +32,17 @@ router.post('/toggle-status', adminAuth, LicenseController.toggleLicenseStatus);
 router.get('/debug-license-types', adminAuth, LicenseController.debugLicenseTypes);
 
 // Stripe mode control routes
-router.get('/stripe-mode-status', adminAuth, async (req, res) => {
+router.get('/api/stripe-mode-status', adminAuth, async (req, res) => {
   try {
     const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
     
+    console.log(`🔍 Current Stripe mode: ${isTestMode ? 'TEST' : 'LIVE'} (STRIPE_TEST_MODE = ${process.env.STRIPE_TEST_MODE})`);
+    
     res.json({ 
       success: true, 
-      testMode: isTestMode
+      testMode: isTestMode,
+      environmentValue: process.env.STRIPE_TEST_MODE,
+      timestamp: new Date().toISOString()
     });
     
   } catch (error) {
@@ -51,28 +55,58 @@ router.get('/stripe-mode-status', adminAuth, async (req, res) => {
   }
 });
 
-router.post('/update-stripe-mode', adminAuth, async (req, res) => {
+router.post('/api/update-stripe-mode', adminAuth, async (req, res) => {
   try {
     const db = require('../../../db');
     const { testMode } = req.body;
     
     console.log(`🔧 Stripe mode change requested: ${testMode ? 'TEST' : 'LIVE'} mode`);
     
-    // Update environment variable
+    // Update environment variable immediately
     process.env.STRIPE_TEST_MODE = testMode ? 'true' : 'false';
+    console.log(`✅ Environment variable updated: STRIPE_TEST_MODE = ${process.env.STRIPE_TEST_MODE}`);
     
     // Save to database for persistence across restarts
-    await db.query(
-      'INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (setting_key) DO UPDATE SET setting_value = $2, updated_at = NOW()',
-      ['STRIPE_TEST_MODE', testMode ? 'true' : 'false']
-    );
-    
-    console.log(`✅ Stripe mode updated to: ${testMode ? 'TEST' : 'LIVE'} mode`);
+    try {
+      // First, ensure the system_settings table exists
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+          setting_key VARCHAR(100) PRIMARY KEY,
+          setting_value TEXT NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      
+      // Insert or update the setting
+      const result = await db.query(`
+        INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+        VALUES ($1, $2, NOW()) 
+        ON CONFLICT (setting_key) 
+        DO UPDATE SET setting_value = $2, updated_at = NOW()
+        RETURNING *
+      `, ['STRIPE_TEST_MODE', testMode ? 'true' : 'false']);
+      
+      console.log(`✅ Database updated successfully:`, result.rows[0]);
+      
+      // Verify the save worked
+      const verification = await db.query(
+        'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+        ['STRIPE_TEST_MODE']
+      );
+      
+      console.log(`🔍 Database verification: STRIPE_TEST_MODE = ${verification.rows[0]?.setting_value}`);
+      
+    } catch (dbError) {
+      console.error('❌ Database save error:', dbError);
+      // Continue anyway since environment variable is updated
+    }
     
     res.json({ 
       success: true, 
       message: `Stripe mode updated to ${testMode ? 'test' : 'live'} mode`,
-      testMode: testMode
+      testMode: testMode,
+      environmentValue: process.env.STRIPE_TEST_MODE,
+      timestamp: new Date().toISOString()
     });
     
   } catch (error) {
@@ -81,6 +115,31 @@ router.post('/update-stripe-mode', adminAuth, async (req, res) => {
       success: false, 
       message: 'Internal server error while updating Stripe mode',
       error: error.message
+    });
+  }
+});
+
+// Debug route to check system settings
+router.get('/api/debug-system-settings', adminAuth, async (req, res) => {
+  try {
+    const db = require('../../../db');
+    
+    const settings = await db.query('SELECT * FROM system_settings ORDER BY setting_key');
+    
+    res.json({
+      success: true,
+      environment: {
+        STRIPE_TEST_MODE: process.env.STRIPE_TEST_MODE
+      },
+      database: settings.rows,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Debug error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
     });
   }
 });
