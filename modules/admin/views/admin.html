@@ -61,6 +61,37 @@
                 </div>
             </section>
 
+            <!-- Stripe Mode Control Section -->
+            <section class="stripe-mode-control">
+                <div class="section-header">
+                    <h2><i class="fas fa-credit-card"></i> Payment System Configuration</h2>
+                </div>
+                <div class="stripe-mode-card">
+                    <div class="stripe-mode-content">
+                        <div class="stripe-mode-info">
+                            <h3>Stripe Payment Mode</h3>
+                            <p class="stripe-mode-description">
+                                <strong>Test Mode:</strong> Uses test transactions, no real charges<br>
+                                <strong>Live Mode:</strong> Processes real payments and charges customers
+                            </p>
+                        </div>
+                        <div class="stripe-mode-toggle">
+                            <div class="toggle-switch">
+                                <input class="toggle-input" type="checkbox" id="stripeTestMode">
+                                <label class="toggle-label" for="stripeTestMode">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="stripe-mode-status">
+                                <span class="status-badge" id="stripeModeStatus">
+                                    Loading...
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Software Type Management Filter -->
             <div class="software-management-header">
                 <div class="software-type-selector">

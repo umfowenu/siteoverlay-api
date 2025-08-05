@@ -31,6 +31,60 @@ router.post('/toggle-status', adminAuth, LicenseController.toggleLicenseStatus);
 // Debug route
 router.get('/debug-license-types', adminAuth, LicenseController.debugLicenseTypes);
 
+// Stripe mode control routes
+router.get('/stripe-mode-status', adminAuth, async (req, res) => {
+  try {
+    const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+    
+    res.json({ 
+      success: true, 
+      testMode: isTestMode
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting Stripe mode status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error while getting Stripe mode status',
+      error: error.message
+    });
+  }
+});
+
+router.post('/update-stripe-mode', adminAuth, async (req, res) => {
+  try {
+    const db = require('../../../db');
+    const { testMode } = req.body;
+    
+    console.log(`🔧 Stripe mode change requested: ${testMode ? 'TEST' : 'LIVE'} mode`);
+    
+    // Update environment variable
+    process.env.STRIPE_TEST_MODE = testMode ? 'true' : 'false';
+    
+    // Save to database for persistence across restarts
+    await db.query(
+      'INSERT INTO system_settings (setting_key, setting_value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (setting_key) DO UPDATE SET setting_value = $2, updated_at = NOW()',
+      ['STRIPE_TEST_MODE', testMode ? 'true' : 'false']
+    );
+    
+    console.log(`✅ Stripe mode updated to: ${testMode ? 'TEST' : 'LIVE'} mode`);
+    
+    res.json({ 
+      success: true, 
+      message: `Stripe mode updated to ${testMode ? 'test' : 'live'} mode`,
+      testMode: testMode
+    });
+    
+  } catch (error) {
+    console.error('❌ Error updating Stripe mode:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error while updating Stripe mode',
+      error: error.message
+    });
+  }
+});
+
 /**
  * DYNAMIC CONTENT MANAGEMENT ENDPOINTS
  * 

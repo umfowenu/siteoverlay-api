@@ -93,6 +93,16 @@ class AdminDashboard {
             loadDynamicContent();
         });
 
+        // Stripe mode toggle
+        const stripeToggle = document.getElementById('stripeTestMode');
+        if (stripeToggle) {
+            stripeToggle.addEventListener('change', (e) => {
+                this.updateStripeMode(e.target.checked);
+            });
+            // Load current Stripe mode status
+            this.loadStripeModeStatus();
+        }
+
         // Search functionality
         document.getElementById('searchBtn').addEventListener('click', () => {
             this.searchLicenses();
@@ -605,6 +615,80 @@ class AdminDashboard {
         setTimeout(() => {
             notification.remove();
         }, 5000);
+    }
+
+    async loadStripeModeStatus() {
+        try {
+            const response = await fetch(`/admin/stripe-mode-status?admin_key=${this.adminKey}`);
+            const data = await response.json();
+            
+            const statusBadge = document.getElementById('stripeModeStatus');
+            const toggle = document.getElementById('stripeTestMode');
+            
+            if (data.success) {
+                const isTestMode = data.testMode;
+                toggle.checked = isTestMode;
+                statusBadge.textContent = isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
+                statusBadge.className = `status-badge ${isTestMode ? 'test-mode' : 'live-mode'}`;
+            } else {
+                statusBadge.textContent = '❌ Error Loading';
+                statusBadge.className = 'status-badge updating';
+            }
+        } catch (error) {
+            console.error('Error loading Stripe mode status:', error);
+            const statusBadge = document.getElementById('stripeModeStatus');
+            statusBadge.textContent = '❌ Error Loading';
+            statusBadge.className = 'status-badge updating';
+        }
+    }
+
+    async updateStripeMode(isTestMode) {
+        const statusBadge = document.getElementById('stripeModeStatus');
+        const toggle = document.getElementById('stripeTestMode');
+        
+        // Show loading state
+        statusBadge.textContent = '⏳ Updating...';
+        statusBadge.className = 'status-badge updating';
+        
+        try {
+            const response = await fetch('/admin/update-stripe-mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    testMode: isTestMode,
+                    admin_key: this.adminKey 
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update UI
+                statusBadge.textContent = isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
+                statusBadge.className = `status-badge ${isTestMode ? 'test-mode' : 'live-mode'}`;
+                
+                // Show success message
+                this.showNotification(`Stripe mode updated to ${isTestMode ? 'Test' : 'Live'} mode successfully!`, 'success');
+            } else {
+                // Revert toggle on error
+                toggle.checked = !isTestMode;
+                statusBadge.textContent = !isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
+                statusBadge.className = `status-badge ${!isTestMode ? 'test-mode' : 'live-mode'}`;
+                
+                this.showNotification('Failed to update Stripe mode: ' + data.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error updating Stripe mode:', error);
+            
+            // Revert toggle on error
+            toggle.checked = !isTestMode;
+            statusBadge.textContent = !isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
+            statusBadge.className = `status-badge ${!isTestMode ? 'test-mode' : 'live-mode'}`;
+            
+            this.showNotification('Network error while updating Stripe mode', 'error');
+        }
     }
 
     formatCurrency(amount) {

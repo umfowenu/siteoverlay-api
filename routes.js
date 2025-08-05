@@ -1124,6 +1124,15 @@ async function initializeDatabase() {
       )
     `);
 
+    // Create system_settings table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        setting_key VARCHAR(100) PRIMARY KEY,
+        setting_value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     // Create indexes for performance
     await db.query('CREATE INDEX IF NOT EXISTS idx_licenses_license_key ON licenses(license_key)');
     await db.query('CREATE INDEX IF NOT EXISTS idx_licenses_customer_email ON licenses(customer_email)');
@@ -1139,8 +1148,24 @@ async function initializeDatabase() {
   }
 }
 
+// Load system settings from database on startup
+async function loadSystemSettings() {
+  try {
+    const settings = await db.query('SELECT setting_key, setting_value FROM system_settings');
+    settings.rows.forEach(row => {
+      process.env[row.setting_key] = row.setting_value;
+    });
+    console.log('📋 System settings loaded from database');
+  } catch (error) {
+    console.log('⚠️ No system settings found in database, using environment defaults');
+  }
+}
+
 // Initialize database on startup
 initializeDatabase();
+
+// Load system settings after database initialization
+loadSystemSettings();
 
 /**
  * PUBLIC DYNAMIC CONTENT ENDPOINT
