@@ -354,9 +354,12 @@ router.post('/request-paid-license', async (req, res) => {
       AND kill_switch_enabled = true
     `, [email]);
     if (subscription.rows.length === 0) {
+      console.log('🔍 No subscription found for email:', email);
+      
       return res.json({
         success: false,
-        message: 'No active subscription found. Please purchase or request a trial.'
+        message: 'No active subscription found for this email address. If you purchased with a different email, please contact support with your purchase details.',
+        support_action: 'email_mismatch'
       });
     }
     // 2. Check site limits
