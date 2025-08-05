@@ -57,6 +57,9 @@ class AdminDashboard {
                 
                 this.loadPurchasers();
                 this.loadTrials();
+                
+                // MISSING: Initialize Stripe mode toggle
+                this.initializeStripeMode();
             }
         });
         
@@ -93,15 +96,7 @@ class AdminDashboard {
             loadDynamicContent();
         });
 
-        // Stripe mode toggle
-        const stripeToggle = document.getElementById('stripeTestMode');
-        if (stripeToggle) {
-            stripeToggle.addEventListener('change', (e) => {
-                this.updateStripeMode(e.target.checked);
-            });
-            // Load current Stripe mode status
-            this.loadStripeModeStatus();
-        }
+
 
         // Search functionality
         document.getElementById('searchBtn').addEventListener('click', () => {
@@ -617,79 +612,7 @@ class AdminDashboard {
         }, 5000);
     }
 
-    async loadStripeModeStatus() {
-        try {
-            const response = await fetch(`/admin/stripe-mode-status?admin_key=${this.adminKey}`);
-            const data = await response.json();
-            
-            const statusBadge = document.getElementById('stripeModeStatus');
-            const toggle = document.getElementById('stripeTestMode');
-            
-            if (data.success) {
-                const isTestMode = data.testMode;
-                toggle.checked = isTestMode;
-                statusBadge.textContent = isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
-                statusBadge.className = `status-badge ${isTestMode ? 'test-mode' : 'live-mode'}`;
-            } else {
-                statusBadge.textContent = '❌ Error Loading';
-                statusBadge.className = 'status-badge updating';
-            }
-        } catch (error) {
-            console.error('Error loading Stripe mode status:', error);
-            const statusBadge = document.getElementById('stripeModeStatus');
-            statusBadge.textContent = '❌ Error Loading';
-            statusBadge.className = 'status-badge updating';
-        }
-    }
 
-    async updateStripeMode(isTestMode) {
-        const statusBadge = document.getElementById('stripeModeStatus');
-        const toggle = document.getElementById('stripeTestMode');
-        
-        // Show loading state
-        statusBadge.textContent = '⏳ Updating...';
-        statusBadge.className = 'status-badge updating';
-        
-        try {
-            const response = await fetch('/admin/update-stripe-mode', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    testMode: isTestMode,
-                    admin_key: this.adminKey 
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                // Update UI
-                statusBadge.textContent = isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
-                statusBadge.className = `status-badge ${isTestMode ? 'test-mode' : 'live-mode'}`;
-                
-                // Show success message
-                this.showNotification(`Stripe mode updated to ${isTestMode ? 'Test' : 'Live'} mode successfully!`, 'success');
-            } else {
-                // Revert toggle on error
-                toggle.checked = !isTestMode;
-                statusBadge.textContent = !isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
-                statusBadge.className = `status-badge ${!isTestMode ? 'test-mode' : 'live-mode'}`;
-                
-                this.showNotification('Failed to update Stripe mode: ' + data.message, 'error');
-            }
-        } catch (error) {
-            console.error('Error updating Stripe mode:', error);
-            
-            // Revert toggle on error
-            toggle.checked = !isTestMode;
-            statusBadge.textContent = !isTestMode ? '🧪 Test Mode' : '🚀 Live Mode';
-            statusBadge.className = `status-badge ${!isTestMode ? 'test-mode' : 'live-mode'}`;
-            
-            this.showNotification('Network error while updating Stripe mode', 'error');
-        }
-    }
 
     formatCurrency(amount) {
         return new Intl.NumberFormat('en-US', {
@@ -1213,6 +1136,113 @@ class AdminDashboard {
                 <p><strong>Training URL:</strong> <a href="#">https://siteoverlaypro.com/training</a></p>
             </div>
         `;
+    }
+
+    // Initialize Stripe mode toggle
+    async initializeStripeMode() {
+        try {
+            const response = await fetch(`/admin/stripe-mode-status?admin_key=${this.adminKey}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const toggle = document.getElementById('stripeTestMode');
+                const status = document.getElementById('stripeModeStatus');
+                
+                toggle.checked = data.testMode;
+                this.updateStripeModeDisplay(data.testMode);
+                
+                // Add event listener for toggle changes
+                toggle.addEventListener('change', (e) => {
+                    this.toggleStripeMode(e.target.checked);
+                });
+                
+            } else {
+                document.getElementById('stripeModeStatus').textContent = '❌ Error Loading';
+                document.getElementById('stripeModeStatus').className = 'status-badge status-error';
+            }
+            
+        } catch (error) {
+            console.error('Error loading Stripe mode:', error);
+            document.getElementById('stripeModeStatus').textContent = '❌ Error Loading';
+            document.getElementById('stripeModeStatus').className = 'status-badge status-error';
+        }
+    }
+
+    // Toggle Stripe mode
+    async toggleStripeMode(isTestMode) {
+        const toggle = document.getElementById('stripeTestMode');
+        const status = document.getElementById('stripeModeStatus');
+        
+        // Show loading state
+        status.textContent = '⏳ Updating...';
+        status.className = 'status-badge status-loading';
+        toggle.disabled = true;
+        
+        try {
+            const response = await fetch('/admin/update-stripe-mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    testMode: isTestMode,
+                    admin_key: this.adminKey 
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.updateStripeModeDisplay(isTestMode);
+                this.showAlert('success', `Stripe mode updated to ${isTestMode ? 'Test' : 'Live'} mode successfully!`);
+            } else {
+                // Revert toggle on error
+                toggle.checked = !isTestMode;
+                this.updateStripeModeDisplay(!isTestMode);
+                this.showAlert('error', 'Failed to update Stripe mode: ' + data.message);
+            }
+            
+        } catch (error) {
+            console.error('Error updating Stripe mode:', error);
+            // Revert toggle on error
+            toggle.checked = !isTestMode;
+            this.updateStripeModeDisplay(!isTestMode);
+            this.showAlert('error', 'Network error while updating Stripe mode');
+        } finally {
+            toggle.disabled = false;
+        }
+    }
+
+    // Update Stripe mode display
+    updateStripeModeDisplay(isTestMode) {
+        const status = document.getElementById('stripeModeStatus');
+        
+        if (isTestMode) {
+            status.textContent = '🧪 Test Mode';
+            status.className = 'status-badge status-warning';
+        } else {
+            status.textContent = '🚀 Live Mode';
+            status.className = 'status-badge status-success';
+        }
+    }
+
+    // Show alert message
+    showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.dashboard-container') || document.body;
+        container.insertBefore(alertDiv, container.firstChild);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
     }
 }
 
