@@ -9,6 +9,19 @@ const {
 } = require('../utils/license-mappings');
 const { sendToPabbly, sendPurchaseToPabbly } = require('../utils/pabbly-utils');
 
+// Add this function at the top of the file
+async function getStripeTestMode() {
+  try {
+    const result = await db.query('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['STRIPE_TEST_MODE']);
+    if (result.rows.length > 0) {
+      return result.rows[0].setting_value === 'true';
+    }
+  } catch (error) {
+    console.log('⚠️ Database read failed, using environment fallback');
+  }
+  return process.env.STRIPE_TEST_MODE === 'true';
+}
+
 // Payment processor integrations
 const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
 const stripeSecretKey = isTestMode ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY;
@@ -23,9 +36,10 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
   let event;
 
   try {
-    const webhookSecret = isTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET;
+    const currentTestMode = await getStripeTestMode();
+    const webhookSecret = currentTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET;
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    console.log(`🔧 Stripe webhook verified (${isTestMode ? 'TEST' : 'LIVE'} mode):`, event.type);
+    console.log(`🔧 Stripe webhook verified (${currentTestMode ? 'TEST' : 'LIVE'} mode):`, event.type);
   } catch (err) {
     console.error('❌ Stripe webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -70,6 +84,7 @@ async function handleCheckoutCompleted(session) {
   try {
     console.log('💳 Processing Stripe checkout completion:', session.id);
 
+    const currentTestMode = await getStripeTestMode();
     const customer = await stripe.customers.retrieve(session.customer);
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
     const priceId = lineItems.data[0]?.price?.id;
@@ -181,12 +196,12 @@ async function handleCheckoutCompleted(session) {
     // Send purchase data to Pabbly/AWeber (skip in test mode unless override enabled)
     const allowEmailsInTestMode = process.env.STRIPE_TEST_MODE_ALLOW_EMAILS === 'true';
 
-    if (!isTestMode || (isTestMode && allowEmailsInTestMode)) {
+    if (!currentTestMode || (currentTestMode && allowEmailsInTestMode)) {
       await sendPurchaseToPabbly(customer.email, licenseType, {
         customer_name: customer.name || session.customer_details?.name,
         next_renewal: renewalDate ? renewalDate.toISOString().split('T')[0] : 'One-time payment'
       });
-      console.log(`✅ Purchase data sent to Pabbly (${isTestMode ? 'TEST mode with emails' : 'LIVE mode'})`);
+      console.log(`✅ Purchase data sent to Pabbly (${currentTestMode ? 'TEST mode with emails' : 'LIVE mode'})`);
     } else {
       console.log('🧪 Test mode: Skipping Pabbly webhook (no emails sent)');
     }

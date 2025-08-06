@@ -209,7 +209,17 @@ router.get('/debug-content', adminAuth, async (req, res) => {
 // Stripe Payment Mode Management Routes
 router.get('/stripe-mode-status', adminAuth, async (req, res) => {
   try {
-    const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+    // Get from database first, fallback to environment variable
+    let isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+    try {
+      const db = require('../../../db');
+      const result = await db.query('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['STRIPE_TEST_MODE']);
+      if (result.rows.length > 0) {
+        isTestMode = result.rows[0].setting_value === 'true';
+      }
+    } catch (dbError) {
+      console.log('⚠️ Using environment variable fallback');
+    }
     
     console.log(`🔧 Stripe mode status request: ${isTestMode ? 'TEST' : 'LIVE'}`);
     
