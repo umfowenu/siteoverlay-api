@@ -1172,7 +1172,9 @@ class AdminDashboard {
             console.log('🔍 Loading Stripe mode status...');
             console.log('🔍 Using admin key:', this.adminKey ? 'Present' : 'Missing');
             
-            const response = await fetch(`/admin/api/stripe-mode-status?admin_key=${this.adminKey}`);
+            const response = await fetch('/admin/api/stripe-mode-status', {
+                headers: { 'x-admin-key': this.adminKey }
+            });
             console.log('🔍 Response status:', response.status);
             
             const data = await response.json();
@@ -1209,15 +1211,15 @@ class AdminDashboard {
         
         try {
             const requestBody = { 
-                testMode: isTestMode,
-                admin_key: this.adminKey 
+                testMode: isTestMode
             };
             console.log('🔄 Request body:', requestBody);
             
             const response = await fetch('/admin/api/update-stripe-mode', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-admin-key': this.adminKey
                 },
                 body: JSON.stringify(requestBody)
             });
