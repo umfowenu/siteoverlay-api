@@ -17,9 +17,9 @@ app.use((req, res, next) => {
   }
 });
 
-// Stripe webhooks need raw, others can use json
+// Stripe and Paddle webhooks need raw, others can use json
 app.use((req, res, next) => {
-  if (req.originalUrl === '/api/stripe/webhook') {
+  if (req.originalUrl === '/api/stripe/webhook' || req.originalUrl === '/api/paddle/webhook') {
     next(); // Let the route handle body parsing
   } else {
     express.json()(req, res, next);

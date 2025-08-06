@@ -320,4 +320,86 @@ router.get('/debug-stripe-mode', adminAuth, async (req, res) => {
   }
 });
 
+// Paddle mode toggle (same pattern as Stripe)
+router.get('/paddle-mode-status', adminAuth, async (req, res) => {
+  try {
+    const db = require('../../../db');
+    
+    let isTestMode = process.env.PADDLE_TEST_MODE === 'true';
+    try {
+      const result = await db.query('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['PADDLE_TEST_MODE']);
+      if (result.rows.length > 0) {
+        isTestMode = result.rows[0].setting_value === 'true';
+      }
+    } catch (dbError) {
+      console.log('⚠️ Using environment variable fallback');
+    }
+    
+    res.json({ 
+      success: true, 
+      testMode: isTestMode,
+      environmentValue: process.env.PADDLE_TEST_MODE,
+      source: 'database',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error getting Paddle mode status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error getting Paddle mode status',
+      error: error.message
+    });
+  }
+});
+
+router.post('/update-paddle-mode', adminAuth, async (req, res) => {
+  try {
+    const db = require('../../../db');
+    const { testMode } = req.body;
+    
+    console.log(`🏛️ Paddle mode update request: ${testMode ? 'SANDBOX' : 'LIVE'} mode`);
+    
+    // Update environment variable immediately
+    process.env.PADDLE_TEST_MODE = testMode ? 'true' : 'false';
+    console.log(`✅ Environment updated: PADDLE_TEST_MODE = ${process.env.PADDLE_TEST_MODE}`);
+    
+    // Save to database for persistence
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+          setting_key VARCHAR(100) PRIMARY KEY,
+          setting_value TEXT NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      
+      await db.query(`
+        INSERT INTO system_settings (setting_key, setting_value, updated_at) 
+        VALUES ($1, $2, NOW()) 
+        ON CONFLICT (setting_key) 
+        DO UPDATE SET setting_value = $2, updated_at = NOW()
+      `, ['PADDLE_TEST_MODE', testMode ? 'true' : 'false']);
+      
+      console.log(`✅ Database updated: PADDLE_TEST_MODE = ${testMode}`);
+      
+    } catch (dbError) {
+      console.error('❌ Database save error:', dbError);
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Paddle mode updated to ${testMode ? 'sandbox' : 'live'} mode`, 
+      testMode: testMode,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error updating Paddle mode:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error updating Paddle mode',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router; 

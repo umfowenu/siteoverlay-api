@@ -25,6 +25,7 @@ const adminRoutes = require('./routes/admin');
 const stripeRoutes = require('./routes/stripe');
 const paypalRoutes = require('./routes/paypal');
 const warriorplusRoutes = require('./routes/warriorplus');
+const paddleRoutes = require('./routes/paddle');
 
 // (All old utility function definitions are now removed from the bottom of the file, only initializeDatabase and module.exports = router remain)
 
@@ -369,6 +370,7 @@ router.use('/', adminRoutes);
 router.use('/', stripeRoutes);
 router.use('/', paypalRoutes);
 router.use('/', warriorplusRoutes);
+router.use('/', paddleRoutes);
 
 // ============================================================================
 // DYNAMIC CONTENT ENDPOINTS
