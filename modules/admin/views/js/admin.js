@@ -1140,31 +1140,40 @@ class AdminDashboard {
 
     // Initialize Stripe mode toggle
     async initializeStripeMode() {
+        // ALWAYS add event listener first, regardless of API success
+        const toggle = document.getElementById('stripeTestMode');
+        const status = document.getElementById('stripeModeStatus');
+        
+        if (toggle) {
+            // Remove any existing event listeners
+            toggle.removeEventListener('change', this.handleStripeToggle);
+            
+            // Add event listener
+            this.handleStripeToggle = (e) => {
+                this.toggleStripeMode(e.target.checked);
+            };
+            toggle.addEventListener('change', this.handleStripeToggle);
+            console.log('✅ Stripe toggle event listener attached');
+        } else {
+            console.error('❌ Stripe toggle element not found');
+            return;
+        }
+        
+        // Now try to load current status
         try {
             console.log('🔍 Loading Stripe mode status...');
+            console.log('🔍 Using admin key:', this.adminKey ? 'Present' : 'Missing');
             
             const response = await fetch(`/admin/api/stripe-mode-status?admin_key=${this.adminKey}`);
+            console.log('🔍 Response status:', response.status);
             
             const data = await response.json();
             console.log('🔍 Stripe mode response:', data);
             
             if (data.success) {
-                const toggle = document.getElementById('stripeTestMode');
-                const status = document.getElementById('stripeModeStatus');
-                
-                if (toggle && status) {
-                    toggle.checked = data.testMode;
-                    this.updateStripeModeDisplay(data.testMode);
-                    
-                    // Add event listener for toggle changes
-                    toggle.addEventListener('change', (e) => {
-                        this.toggleStripeMode(e.target.checked);
-                    });
-                    
-                    console.log('✅ Stripe mode initialized:', data.testMode ? 'TEST' : 'LIVE');
-                } else {
-                    console.error('❌ Stripe mode elements not found');
-                }
+                toggle.checked = data.testMode;
+                this.updateStripeModeDisplay(data.testMode);
+                console.log('✅ Stripe mode initialized:', data.testMode ? 'TEST' : 'LIVE');
             } else {
                 console.error('❌ Failed to load Stripe mode:', data.message);
                 this.showStripeModeError('Failed to load mode');
@@ -1172,6 +1181,7 @@ class AdminDashboard {
             
         } catch (error) {
             console.error('❌ Error loading Stripe mode:', error);
+            console.error('❌ Error details:', error.message);
             this.showStripeModeError('Connection error');
         }
     }
@@ -1182,6 +1192,7 @@ class AdminDashboard {
         const status = document.getElementById('stripeModeStatus');
         
         console.log('🔄 Toggling Stripe mode to:', isTestMode ? 'TEST' : 'LIVE');
+        console.log('🔄 Admin key available:', this.adminKey ? 'Yes' : 'No');
         
         // Show loading state
         status.textContent = '⏳ Updating...';
@@ -1189,34 +1200,52 @@ class AdminDashboard {
         toggle.disabled = true;
         
         try {
+            const requestBody = { 
+                testMode: isTestMode,
+                admin_key: this.adminKey 
+            };
+            console.log('🔄 Request body:', requestBody);
+            
             const response = await fetch('/admin/api/update-stripe-mode', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ 
-                    testMode: isTestMode,
-                    admin_key: this.adminKey 
-                })
+                body: JSON.stringify(requestBody)
             });
             
+            console.log('🔄 Response status:', response.status);
+            console.log('🔄 Response ok:', response.ok);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
+            console.log('🔄 Response data:', data);
             
             if (data.success) {
                 this.updateStripeModeDisplay(isTestMode);
                 console.log('✅ Stripe mode updated successfully');
+                
+                // Show success notification
+                this.showNotification(`Stripe mode updated to ${isTestMode ? 'Test' : 'Live'} mode`, 'success');
             } else {
                 console.error('❌ Failed to update Stripe mode:', data.message);
                 // Revert toggle on error
                 toggle.checked = !isTestMode;
                 this.updateStripeModeDisplay(!isTestMode);
+                this.showNotification('Failed to update Stripe mode: ' + (data.message || 'Unknown error'), 'error');
             }
             
         } catch (error) {
             console.error('❌ Error updating Stripe mode:', error);
+            console.error('❌ Error details:', error.message);
+            
             // Revert toggle on error
             toggle.checked = !isTestMode;
             this.updateStripeModeDisplay(!isTestMode);
+            this.showNotification('Connection error while updating Stripe mode', 'error');
         } finally {
             toggle.disabled = false;
         }
