@@ -1,0 +1,5 @@
+[33m9d8caa3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m Add missing Stripe mode JavaScript methods
+[33m2222a5e[m Fix Stripe mode toggle functionality
+[33md7818bf[m 🔧 FIX: Stripe mode authentication headers
+[33m703efb9[m 🔧 FIX: Add missing event listener for Stripe mode toggle
+[33m9472c6b[m Fix Stripe mode toggle with improved debugging and event handling
