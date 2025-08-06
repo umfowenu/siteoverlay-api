@@ -291,4 +291,33 @@ router.post('/update-stripe-mode', adminAuth, async (req, res) => {
   }
 });
 
+router.get('/debug-stripe-mode', adminAuth, async (req, res) => {
+  try {
+    const db = require('../../../db');
+    
+    // Get current mode the same way Stripe processing does
+    let isTestMode = process.env.STRIPE_TEST_MODE === 'true';
+    let result;
+    try {
+      result = await db.query('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['STRIPE_TEST_MODE']);
+      if (result.rows.length > 0) {
+        isTestMode = result.rows[0].setting_value === 'true';
+      }
+    } catch (dbError) {
+      // Uses environment fallback
+    }
+    
+    res.json({
+      success: true,
+      current_payment_mode: isTestMode ? 'TEST' : 'LIVE',
+      database_value: result?.rows[0]?.setting_value || 'not_found',
+      environment_value: process.env.STRIPE_TEST_MODE,
+      safe_to_process_payments: isTestMode ? 'NO REAL CHARGES' : '⚠️ REAL MONEY',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router; 
