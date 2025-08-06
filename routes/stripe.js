@@ -9,7 +9,7 @@ const {
 } = require('../utils/license-mappings');
 const { sendToPabbly, sendPurchaseToPabbly } = require('../utils/pabbly-utils');
 
-// Add this function at the top of the file
+// Get Stripe mode from database (with environment fallback)
 async function getStripeTestMode() {
   try {
     const result = await db.query('SELECT setting_value FROM system_settings WHERE setting_key = $1', ['STRIPE_TEST_MODE']);
@@ -22,10 +22,12 @@ async function getStripeTestMode() {
   return process.env.STRIPE_TEST_MODE === 'true';
 }
 
-// Payment processor integrations
-const isTestMode = process.env.STRIPE_TEST_MODE === 'true';
-const stripeSecretKey = isTestMode ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY;
-const stripe = require('stripe')(stripeSecretKey);
+// Initialize Stripe with current mode (this will be called for each request)
+async function initializeStripe() {
+  const isTestMode = await getStripeTestMode();
+  const stripeSecretKey = isTestMode ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY;
+  return require('stripe')(stripeSecretKey);
+}
 
 // ============================================================================
 // STRIPE WEBHOOK HANDLING
@@ -36,6 +38,7 @@ router.post('/stripe/webhook', express.raw({type: 'application/json'}), async (r
   let event;
 
   try {
+    const stripe = await initializeStripe();
     const currentTestMode = await getStripeTestMode();
     const webhookSecret = currentTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET;
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
@@ -84,6 +87,7 @@ async function handleCheckoutCompleted(session) {
   try {
     console.log('💳 Processing Stripe checkout completion:', session.id);
 
+    const stripe = await initializeStripe();
     const currentTestMode = await getStripeTestMode();
     const customer = await stripe.customers.retrieve(session.customer);
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
@@ -217,6 +221,7 @@ async function handleSubscriptionPayment(invoice) {
   try {
     console.log('🔄 Processing Stripe subscription payment:', invoice.id);
 
+    const stripe = await initializeStripe();
     const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
     const customer = await stripe.customers.retrieve(subscription.customer);
 
