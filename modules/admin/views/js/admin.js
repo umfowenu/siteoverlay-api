@@ -107,6 +107,14 @@ class AdminDashboard {
         document.getElementById('customerSearchBtn').addEventListener('click', () => {
             this.getCustomerData();
         });
+
+        // Stripe mode toggle
+        const stripeToggle = document.getElementById('stripeTestMode');
+        if (stripeToggle) {
+            stripeToggle.addEventListener('change', () => {
+                this.toggleStripeMode(stripeToggle.checked);
+            });
+        }
     }
 
     async loadDashboard() {
