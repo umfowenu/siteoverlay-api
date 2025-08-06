@@ -67,6 +67,81 @@ class AdminDashboard {
         initializePreview();
         setupRealtimePreview();
         updateInterfaceLabel();
+async initializeStripeMode() {
+    try {
+        console.log('🔧 Loading Stripe mode...');
+        
+        const response = await fetch('/admin/api/stripe-mode-status', {
+            headers: { 'x-admin-key': this.adminKey }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            this.updateStripeModeDisplay(data.testMode);
+            console.log(`✅ Stripe mode: ${data.testMode ? 'TEST' : 'LIVE'}`);
+        } else {
+            this.showStripeModeError('Failed to load status');
+        }
+    } catch (error) {
+        console.error('❌ Stripe mode load error:', error);
+        this.showStripeModeError('Connection error');
+    }
+}
+
+async toggleStripeMode() {
+    try {
+        const toggle = document.getElementById('stripeTestModeToggle');
+        const newTestMode = toggle.checked;
+        
+        console.log(`🔧 Toggling to: ${newTestMode ? 'TEST' : 'LIVE'}`);
+        
+        document.getElementById('stripeModeStatus').innerHTML = '<span class="status-loading">⏳ Updating...</span>';
+        
+        const response = await fetch('/admin/api/update-stripe-mode', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-key': this.adminKey
+            },
+            body: JSON.stringify({ testMode: newTestMode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            this.updateStripeModeDisplay(data.testMode);
+            console.log(`✅ Updated to: ${data.testMode ? 'TEST' : 'LIVE'}`);
+        } else {
+            toggle.checked = !newTestMode;
+            this.showStripeModeError('Update failed');
+        }
+    } catch (error) {
+        console.error('❌ Toggle error:', error);
+        document.getElementById('stripeTestModeToggle').checked = !document.getElementById('stripeTestModeToggle').checked;
+        this.showStripeModeError('Connection error');
+    }
+}
+
+updateStripeModeDisplay(testMode) {
+    const toggle = document.getElementById('stripeTestModeToggle');
+    const status = document.getElementById('stripeModeStatus');
+    
+    if (toggle) toggle.checked = testMode;
+    
+    if (status) {
+        status.innerHTML = testMode ? 
+            '<span class="status-warning">⚠️ Test Mode</span>' : 
+            '<span class="status-success">✅ Live Mode</span>';
+    }
+}
+
+showStripeModeError(message) {
+    const status = document.getElementById('stripeModeStatus');
+    if (status) {
+        status.innerHTML = `<span class="status-error">❌ ${message}</span>`;
+    }
+}
     }
 
     getAdminKey() {
